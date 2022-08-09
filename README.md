@@ -1,5 +1,5 @@
 <h1>
-devito <a href="https://npmjs.org/package/devito"><img src="https://img.shields.io/badge/npm-v1.0.0-F00.svg?colorA=000"/></a> <a href="src"><img src="https://img.shields.io/badge/loc-336-FFF.svg?colorA=000"/></a> <a href="https://cdn.jsdelivr.net/npm/devito@1.0.0/dist/devito.min.js"><img src="https://img.shields.io/badge/brotli-104.7K-333.svg?colorA=000"/></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F0B.svg?colorA=000"/></a>
+devito <a href="https://npmjs.org/package/devito"><img src="https://img.shields.io/badge/npm-v1.1.0-F00.svg?colorA=000"/></a> <a href="src"><img src="https://img.shields.io/badge/loc-368-FFF.svg?colorA=000"/></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F0B.svg?colorA=000"/></a>
 </h1>
 
 <p></p>
@@ -23,11 +23,17 @@ Fast http/2 web dev server
 <img width="403.4285714285714" src="cli.png" />
 </p>
 
-<p>devito is a fast http/2 web dev server, inspired by <a href="https://vitejs.dev/">vite</a>.</p>
-<p>It uses <a href="https://swc.rs/">swc</a> and <a href="https://esbuild.github.io/">esbuild</a>.</p>
-<pre><code class="language-sh">devito my-file.tsx</code></pre>
-<p>The above will serve <code>my-file.tsx</code>. It will transform any dependency that is not an ESM module and will refresh on every change.</p>
-<p>You will need a <a href="https://swc.rs/docs/configuration/swcrc"><code>.swcrc</code></a> file at the project's root for the transformations.</p>
+devito is a fast http/2 web dev server, inspired by [vite](https://vitejs.dev/).
+
+It uses [swc](https://swc.rs/) and [esbuild](https://esbuild.github.io/).
+
+```sh
+devito my-file.tsx
+```
+
+The above will serve `my-file.tsx`. It will transform any dependency that is not an ESM module and will refresh on every change.
+
+You will need a [`.swcrc`](https://swc.rs/docs/configuration/swcrc) file at the project's root for the transformations.
 
 ## API
 
@@ -44,11 +50,13 @@ Fast http/2 web dev server
 - [everyday-node](https://npmjs.org/package/everyday-node) by [stagas](https://github.com/stagas) &ndash; Everyday node utilities.
 - [everyday-utils](https://npmjs.org/package/everyday-utils) by [stagas](https://github.com/stagas) &ndash; Everyday utilities
 - [find-free-ports](https://npmjs.org/package/find-free-ports) by [Sam Vervaeck](https://github.com/samvv) &ndash; Find multiple free ports on localhost
+- [github-markdown-css](https://npmjs.org/package/github-markdown-css) by [Sindre Sorhus](https://sindresorhus.com) &ndash; The minimal amount of CSS to replicate the GitHub Markdown style
 - [make-cert](https://npmjs.org/package/make-cert) by [Vinson Chuong](https://github.com/vinsonchuong) &ndash; Quickly generate a self-signed cert to start an HTTPS server
+- [markdown-it](https://npmjs.org/package/markdown-it) by [markdown-it](https://github.com/markdown-it) &ndash; Markdown-it - modern pluggable markdown parser.
 - [mime-types](https://npmjs.org/package/mime-types) by [jshttp](https://github.com/jshttp) &ndash; The ultimate javascript content-type utility.
 - [qrcode-terminal](https://npmjs.org/package/qrcode-terminal) by [gtanner](https://github.com/gtanner) &ndash; QRCodes, in the terminal
 - [running-at](https://npmjs.org/package/running-at) by [Maximilian Schiller](https://github.com/BetaHuhn) &ndash; Get local and network ip address
-- [sse](https://npmjs.org/package/sse) by [Einar Otto Stangvik](http://2x.io) &ndash; undefined
+- [sse](https://npmjs.org/package/sse) by [Einar Otto Stangvik](http://2x.io)
 
 ## Contributing
 

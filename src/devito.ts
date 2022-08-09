@@ -92,7 +92,10 @@ export async function devito(options: DevitoOptions) {
     deps.add(dep)
   }
 
+  // transform extensions
   const exts = /\.tsx?$/
+
+  // importmap
   const importmap: Record<string, string> = {}
 
   const updateCache = (rootFilter = '/', force = false) => {
