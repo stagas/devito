@@ -7,11 +7,11 @@ import { queue } from 'event-toolkit'
 import * as fs from 'fs'
 import * as http2 from 'http2'
 import makeCert from 'make-cert'
-import mime from 'mime-types'
 import { AddressInfo } from 'net'
 import * as os from 'os'
 import * as path from 'path'
 import SSE from 'sse'
+import { contentType } from './util'
 
 export class DevitoOptions {
   @arg('<file>', 'Entry point file.') file!: string
@@ -30,14 +30,15 @@ export class DevitoOptions {
 export async function devito(options: DevitoOptions) {
   const print = (s: string) => console.log(`${new Date().toLocaleTimeString()} ${s}`)
 
-  const clients = new Set<any>()
-
-  function refresh() {
-    for (const client of clients) {
-      client.send('refresh')
+  // sse clients that will reload when files change or the server (re)starts
+  const sseClients = new Set<any>()
+  function reload() {
+    for (const client of sseClients) {
+      client.send('reload')
     }
   }
 
+  // read swc config https://swc.rs/docs/configuration/swcrc
   const swc = Object.assign(
     JSON.parse(fs.readFileSync(path.join(options.rootPath, '.swcrc'), 'utf-8')),
     {
@@ -46,11 +47,46 @@ export async function devito(options: DevitoOptions) {
     }
   )
 
+  // https keys
   const keys = makeCert('localhost')
 
-  // discover dependencies
-  const depCache: EachDepOptions['cache'] = new Map()
+  // entry file
   const entryFile = options.entryFile
+
+  // dependencies cache
+  const depCache: EachDepOptions['cache'] = new Map()
+
+  // headers
+  let headers: http2.OutgoingHttpHeaders = {
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-embedder-policy': 'require-corp',
+    'access-control-allow-origin': '*',
+    'cache-control': 'public, max-age=604800, immutable',
+    ':status': 200,
+  }
+
+  // open markdown files
+  if (entryFile.endsWith('.md')) {
+    headers = {
+      'access-control-allow-origin': '*',
+      ':status': 200,
+    }
+    const MarkdownIt = (await import('markdown-it')).default
+    const html = MarkdownIt({ html: true }).render(fs.readFileSync(entryFile, 'utf-8'), {})
+    const cssPath = require.resolve('github-markdown-css')
+    depCache.set(cssPath, { ids: [], source: fs.readFileSync(cssPath, 'utf-8') })
+    depCache.set(entryFile, {
+      ids: [['github-markdown-css', cssPath]],
+      source: /*ts*/ `
+        import 'github-markdown-css'
+        document.body.classList.add('markdown-body')
+        document.body.style = 'max-width: 830px; margin: 0 auto;'
+        document.body.innerHTML = ${JSON.stringify(html)}
+      `,
+    })
+  }
+
+  // traverse dependencies
   const deps = new Set<string>()
   for await (const dep of eachDep(entryFile, { external: true, cache: depCache })) {
     deps.add(dep)
@@ -66,7 +102,7 @@ export async function devito(options: DevitoOptions) {
 
       const { dir, ext } = path.parse(depPath)
       if (ext === '.css') {
-        dep.source = `
+        dep.source = /*ts*/ `
           const style = document.createElement('style');
           style.textContent = ${JSON.stringify(dep.source)};
           document.head.appendChild(style);
@@ -101,27 +137,19 @@ export async function devito(options: DevitoOptions) {
 
   updateCache()
 
-  const dirs = new Set([...depCache.keys()].map(x => path.dirname(x)))
-  for (const dir of dirs) {
+  const watchDirs = new Set([...depCache.keys()].map(x => path.dirname(x)))
+  for (const dir of watchDirs) {
     fs.watch(
       dir,
       queue.debounce(50).not.first.not.next.last(() => {
         updateCache(dir, true)
-        refresh()
+        reload()
       })
     )
   }
 
   console.log(depCache.size, 'dependencies cached')
-  console.log(dirs.size, 'directories watching')
-
-  const headers = {
-    'cross-origin-opener-policy': 'same-origin',
-    'cross-origin-embedder-policy': 'require-corp',
-    'access-control-allow-origin': '*',
-    'cache-control': 'public, max-age=604800, immutable',
-    ':status': 200,
-  }
+  console.log(watchDirs.size, 'directories watching')
 
   const pushFromMap = (stream: http2.ServerHttp2Stream, map: Map<string, { source: string }>, key: string) => {
     const pushHeaders: http2.OutgoingHttpHeaders = {
@@ -164,7 +192,7 @@ export async function devito(options: DevitoOptions) {
             if (data.includes('resolve module specifier')) {
               // TODO: these are randomly discovered scripts that
               //  were not detected when analyzing. The browser reports
-              //  a missing script and we try to fetch it and trigger refresh
+              //  a missing script and we try to fetch it and trigger reload
 
               // const [, id] = data.split('"')
               // // console.log('need to import:', id, 'from', options.root)
@@ -179,11 +207,11 @@ export async function devito(options: DevitoOptions) {
               //   // console.log(id, result)
               //   if (id in importmap) {
               //     // console.log('already in')
-              //     refresh()
+              //     reload()
               //     return
               //   }
               //   importmap[id] = '/@fs' + result.split('file://').pop()
-              //   refresh()
+              //   reload()
               // } catch (error) {
               //   // console.log('MODULE ERROR', req.url, importMetaUrl, id)
               // }
@@ -191,7 +219,7 @@ export async function devito(options: DevitoOptions) {
               const [, id, , name] = data.split('\'')
               console.log('cjs:', id)
               importmap[id] = importmap[id] + '?esm=' + name + ',' + id
-              refresh()
+              reload()
             }
             res.stream.end('ok')
           })
@@ -247,7 +275,6 @@ export async function devito(options: DevitoOptions) {
           })
           res.stream.end(depCache.get(file)!.source)
         } else {
-          const contentType = mime.contentType(path.basename(file)) || 'application/octet-stream'
           if (/worker|worklet|processor|iframe/.test(file)) {
             const result = buildSync({
               entryPoints: [file],
@@ -269,7 +296,7 @@ export async function devito(options: DevitoOptions) {
           } else {
             res.stream.respondWithFile(depPath, {
               ...headers,
-              'content-type': contentType,
+              ...contentType(depPath),
               ':status': 200,
             })
           }
@@ -280,7 +307,7 @@ export async function devito(options: DevitoOptions) {
       if (req.url !== '/') {
         res.stream.respondWithFile(path.join(options.rootPath, req.url), {
           ...headers,
-          'content-type': mime.contentType(path.basename(req.url)) || 'application/octet-stream',
+          ...contentType(req.url),
           ':status': 200,
         })
         return
@@ -292,7 +319,7 @@ export async function devito(options: DevitoOptions) {
         }
 
         res.stream.pushStream({
-          [http2.constants.HTTP2_HEADER_PATH]: '/reload.js',
+          [http2.constants.HTTP2_HEADER_PATH]: '/live-reload.js',
         }, (error, pushStream) => {
           if (error) {
             console.error(error)
@@ -304,8 +331,8 @@ export async function devito(options: DevitoOptions) {
             'content-type': 'application/javascript',
             ':status': 200,
           })
-          pushStream.end(`
-            es = new EventSource('/onchange');
+          pushStream.end(/*ts*/ `
+            es = new EventSource('/onreload');
             es.onopen = () => console.warn('live-reload started')
             es.onmessage = () => es.onmessage = () => location = location;
           `)
@@ -318,7 +345,7 @@ export async function devito(options: DevitoOptions) {
           ':status': 200,
         })
 
-        res.stream.end(/* html */ `<!DOCTYPE html>
+        res.stream.end(/*html*/ `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -354,19 +381,35 @@ export async function devito(options: DevitoOptions) {
   </head>
   <body>
     <main></main>
-    <script src="/reload.js"></script>
+
+    <!-- dependencies -->
     <script type="importmap">
       {
         "imports": ${JSON.stringify(importmap)}
       }
     </script>
 
+    <!-- devito runtime -->
     <script>
-      console.log(Object.keys(${JSON.stringify(importmap)}).length, ${JSON.stringify(importmap)})
+      // Detect errors and report them to the server.
+      // This is used to discover dependencies that were not detected
+      // during analyzing and also commonjs modules that can't be
+      // imported and need to be transpiled to esm.
       window.addEventListener('error', error => {
         fetch('/?error', { method: 'POST', body: error.message })
       })
+
+      // print current dependency importmap in console for inspection
+      console.log(
+        Object.keys(${JSON.stringify(importmap)}).length,
+        ${JSON.stringify(importmap)}
+      )
     </script>
+
+    <!-- live-reload script, magically provided by the server -->
+    <script src="/live-reload.js"></script>
+
+    <!-- entry point -->
     <script src="/@fs${entryFile}" type="module"></script>
   </body>
 </html>`)
@@ -374,14 +417,14 @@ export async function devito(options: DevitoOptions) {
     }
   )
 
-  const sse = new SSE(server, { path: '/onchange' })
+  const sse = new SSE(server, { path: '/onreload' })
   sse.on('connection', (client: any) => {
-    clients.add(client)
+    sseClients.add(client)
     client.send('change')
     client.once('close', () => {
-      clients.delete(client)
+      sseClients.delete(client)
     })
-    print('SSE /onchange')
+    print('SSE /onreload')
   })
 
   server.listen(options.port, 'localhost', () => {
