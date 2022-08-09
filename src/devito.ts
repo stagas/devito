@@ -5,6 +5,7 @@ import { eachDep, EachDepOptions } from 'each-dep'
 import { buildSync } from 'esbuild'
 import { queue } from 'event-toolkit'
 import * as fs from 'fs'
+import gracefulShutdown from 'http-graceful-shutdown'
 import * as http2 from 'http2'
 import makeCert from 'make-cert'
 import { AddressInfo } from 'net'
@@ -17,18 +18,31 @@ export class DevitoOptions {
   @arg('<file>', 'Entry point file.') file!: string
   @arg('--root', 'Root directory') root = '.'
   @arg('--port', 'Port') port = 3000
+  @arg('--watch', 'Watch for changes') watch = true
+  @arg('--quiet', 'Silence output') quiet = false
+
+  entrySource?: string
+  alias?: EachDepOptions['alias']
+  depCache = new Map() as EachDepOptions['cache']
+
+  constructor(options: Partial<DevitoOptions> = {}) {
+    Object.assign(this, options)
+  }
 
   get rootPath() {
     return path.resolve(this.root)
   }
 
   get entryFile() {
-    return fs.realpathSync(this.file)
+    return this.entrySource ? this.file : fs.realpathSync(this.file)
   }
 }
 
-export async function devito(options: DevitoOptions) {
-  const print = (s: string) => console.log(`${new Date().toLocaleTimeString()} ${s}`)
+export async function devito(partialOptions: Partial<DevitoOptions>) {
+  const options = new DevitoOptions(partialOptions)
+
+  const log = (...args: any[]) => !options.quiet && console.log(...args)
+  const print = (s: string) => log(`${new Date().toLocaleTimeString()} ${s}`)
 
   // sse clients that will reload when files change or the server (re)starts
   const sseClients = new Set<any>()
@@ -77,7 +91,7 @@ export async function devito(options: DevitoOptions) {
     depCache.set(cssPath, { ids: [], source: fs.readFileSync(cssPath, 'utf-8') })
     depCache.set(entryFile, {
       ids: [['github-markdown-css', cssPath]],
-      source: /*ts*/ `
+      source: `
         import 'github-markdown-css'
         document.body.classList.add('markdown-body')
         document.body.style = 'max-width: 830px; margin: 0 auto;'
@@ -87,10 +101,20 @@ export async function devito(options: DevitoOptions) {
   }
 
   // traverse dependencies
-  const deps = new Set<string>()
-  for await (const dep of eachDep(entryFile, { external: true, cache: depCache })) {
-    deps.add(dep)
+  const analyze = async (entryFile: string, entrySource?: string) => {
+    const deps = new Set<string>()
+    for await (
+      const dep of eachDep(entryFile, {
+        entrySource,
+        external: true,
+        alias: options.alias,
+        cache: depCache,
+      })
+    ) {
+      deps.add(dep)
+    }
   }
+  await analyze(options.entryFile, options.entrySource)
 
   // transform extensions
   const exts = /\.tsx?$/
@@ -98,14 +122,15 @@ export async function devito(options: DevitoOptions) {
   // importmap
   const importmap: Record<string, string> = {}
 
+  const watchers: fs.FSWatcher[] = []
   const updateCache = (rootFilter = '/', force = false) => {
     for (const [depPath, dep] of depCache) {
       if (!depPath.startsWith(rootFilter)) continue
-      if (force) dep.source = fs.readFileSync(depPath, 'utf-8')
+      if (force || !dep.source) dep.source = fs.readFileSync(depPath, 'utf-8')
 
       const { dir, ext } = path.parse(depPath)
       if (ext === '.css') {
-        dep.source = /*ts*/ `
+        dep.source = `
           const style = document.createElement('style');
           style.textContent = ${JSON.stringify(dep.source)};
           document.head.appendChild(style);
@@ -115,7 +140,7 @@ export async function devito(options: DevitoOptions) {
           export default ${JSON.stringify(dep.source)};
         `
       } else {
-        for (const [id, importPath] of dep.ids) {
+        for (const [id, importPath] of dep.ids ?? []) {
           if (!importPath.startsWith(rootFilter)) continue
 
           if (id.startsWith('.')) {
@@ -136,32 +161,34 @@ export async function devito(options: DevitoOptions) {
         }
       }
     }
+    log(depCache.size, 'dependencies cached')
+
+    if (options.watch) {
+      watchers.splice(0).forEach(x => x.close())
+      const watchDirs = new Set([...depCache.keys()].map(x => path.dirname(x)))
+      for (const dir of watchDirs) {
+        watchers.push(fs.watch(
+          dir,
+          queue.debounce(50).not.first.not.next.last(() => {
+            updateCache(dir, true)
+            reload()
+          })
+        ))
+      }
+      log(watchDirs.size, 'directories watching')
+    }
   }
 
   updateCache()
 
-  const watchDirs = new Set([...depCache.keys()].map(x => path.dirname(x)))
-  for (const dir of watchDirs) {
-    fs.watch(
-      dir,
-      queue.debounce(50).not.first.not.next.last(() => {
-        updateCache(dir, true)
-        reload()
-      })
-    )
-  }
-
-  console.log(depCache.size, 'dependencies cached')
-  console.log(watchDirs.size, 'directories watching')
-
-  const pushFromMap = (stream: http2.ServerHttp2Stream, map: Map<string, { source: string }>, key: string) => {
+  const pushFromMap = (stream: http2.ServerHttp2Stream, map: Map<string, { source?: string }>, key: string) => {
     const pushHeaders: http2.OutgoingHttpHeaders = {
       [http2.constants.HTTP2_HEADER_PATH]: `/@fs${key}`,
     }
 
     stream.pushStream(pushHeaders, (error, pushStream) => {
       if (error) {
-        console.error(error)
+        !options.quiet && console.error(error)
         return
       }
       pushStream.respond({
@@ -169,7 +196,7 @@ export async function devito(options: DevitoOptions) {
         'content-type': 'application/javascript',
       })
       pushStream.on('error', error => {
-        console.log('errored push stream', error)
+        log('errored push stream', error)
       })
       pushStream.end(map.get(key)!.source)
     })
@@ -181,7 +208,7 @@ export async function devito(options: DevitoOptions) {
       print(`${req.method === 'GET' ? chalk.grey(req.method) : req.method} ${req.url}`)
 
       req.stream.on('error', error => {
-        console.log('errored', error)
+        log('errored', error)
       })
 
       if (req.method === 'POST') {
@@ -198,29 +225,29 @@ export async function devito(options: DevitoOptions) {
               //  a missing script and we try to fetch it and trigger reload
 
               // const [, id] = data.split('"')
-              // // console.log('need to import:', id, 'from', options.root)
+              // // log('need to import:', id, 'from', options.root)
               // const importMetaUrl = `file://${options.rootPath}/`
 
               // try {
               //   const result = await importMetaResolve(id, importMetaUrl)
               //   if (id === '.') {
-              //     console.log(req.url)
+              //     log(req.url)
               //   }
-              //   // console.log(req.url, importMetaUrl, id, result)
-              //   // console.log(id, result)
+              //   // log(req.url, importMetaUrl, id, result)
+              //   // log(id, result)
               //   if (id in importmap) {
-              //     // console.log('already in')
+              //     // log('already in')
               //     reload()
               //     return
               //   }
               //   importmap[id] = '/@fs' + result.split('file://').pop()
               //   reload()
               // } catch (error) {
-              //   // console.log('MODULE ERROR', req.url, importMetaUrl, id)
+              //   // log('MODULE ERROR', req.url, importMetaUrl, id)
               // }
             } else if (data.includes('does not provide an export')) {
               const [, id, , name] = data.split('\'')
-              console.log('cjs:', id)
+              log('cjs:', id)
               importmap[id] = importmap[id] + '?esm=' + name + ',' + id
               reload()
             }
@@ -271,6 +298,7 @@ export async function devito(options: DevitoOptions) {
           })
           res.stream.end(contents)
         } else if (depCache.has(file)) {
+          console.log('will respond with', file)
           res.stream.respond({
             ...headers,
             'content-type': 'application/javascript',
@@ -278,6 +306,9 @@ export async function devito(options: DevitoOptions) {
           })
           res.stream.end(depCache.get(file)!.source)
         } else {
+          // NOTE: workers and other realms dependencies are bundled
+          // along with their dependencies because we cannot share/resolve
+          // importmaps with those in a clean way yet.
           if (/worker|worklet|processor|iframe/.test(file)) {
             const result = buildSync({
               entryPoints: [file],
@@ -307,6 +338,7 @@ export async function devito(options: DevitoOptions) {
         return
       }
 
+      // any other file that wasn't handled yet, serve directly from root
       if (req.url !== '/') {
         res.stream.respondWithFile(path.join(options.rootPath, req.url), {
           ...headers,
@@ -316,32 +348,35 @@ export async function devito(options: DevitoOptions) {
         return
       }
 
+      // main server entry
       if (req.url === '/') {
+        // push the dependencies
         for (const depPath of depCache.keys()) {
           pushFromMap(res.stream, depCache, depPath)
         }
 
+        // enable live-reload
         res.stream.pushStream({
           [http2.constants.HTTP2_HEADER_PATH]: '/live-reload.js',
         }, (error, pushStream) => {
           if (error) {
-            console.error(error)
+            !options.quiet && console.error(error)
             return
           }
-
           pushStream.respond({
             ...headers,
             'content-type': 'application/javascript',
             ':status': 200,
           })
-          pushStream.end(/*ts*/ `
+          pushStream.end(`
             es = new EventSource('/onreload');
-            es.onopen = () => console.warn('live-reload started')
+            ${options.quiet ? '' : `es.onopen = () => console.warn('live-reload started')`}
             es.onmessage = () => es.onmessage = () => location = location;
           `)
           return
         })
 
+        // send html
         res.stream.respond({
           ...headers,
           'content-type': 'text/html',
@@ -403,10 +438,14 @@ export async function devito(options: DevitoOptions) {
       })
 
       // print current dependency importmap in console for inspection
+      ${
+          options.quiet ? '' : `
       console.log(
         Object.keys(${JSON.stringify(importmap)}).length,
         ${JSON.stringify(importmap)}
       )
+      `
+        }
     </script>
 
     <!-- live-reload script, magically provided by the server -->
@@ -420,6 +459,7 @@ export async function devito(options: DevitoOptions) {
     }
   )
 
+  // start SSE handler
   const sse = new SSE(server, { path: '/onreload' })
   sse.on('connection', (client: any) => {
     sseClients.add(client)
@@ -430,10 +470,13 @@ export async function devito(options: DevitoOptions) {
     print('SSE /onreload')
   })
 
-  server.listen(options.port, 'localhost', () => {
-    const addr = server.address() as AddressInfo
-    const url = `https://localhost:${addr.port}`
-    console.log({ root: options.rootPath.replace(os.homedir(), '~'), addr })
-    console.log('server listening:', url)
-  })
+  // start listening
+  await new Promise<void>(resolve => server.listen(options.port, 'localhost', resolve))
+  const addr = server.address() as AddressInfo
+  const url = `https://localhost:${addr.port}`
+  log('server listening', { root: options.rootPath.replace(os.homedir(), '~'), addr, url })
+
+  const close = gracefulShutdown(server, { forceExit: false })
+
+  return { devito: server, url, analyze, updateCache, close }
 }
