@@ -43,9 +43,11 @@ export class DevitoOptions {
 export async function devito(partialOptions: Partial<DevitoOptions>) {
   const options = new DevitoOptions(partialOptions)
 
-  const file = await discoverFileWithSuffixes(options.file, ['.ts', '.tsx', '.js', '.jsx', '.md'])
-  if (!file) throw new Error('File not found')
-  options.file = file
+  if (!options.entrySource) {
+    const file = await discoverFileWithSuffixes(options.file, ['.ts', '.tsx', '.js', '.jsx', '.md'])
+    if (!file) throw new Error('File not found')
+    options.file = file
+  }
 
   const log = (...args: any[]) => !options.quiet && console.log(...args)
   const print = (s: string) => log(`${new Date().toLocaleTimeString()} ${s}`)
