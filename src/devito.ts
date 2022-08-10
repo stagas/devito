@@ -143,7 +143,8 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
         `
       } else if (ext === '.json') {
         dep.source = `
-          export default ${JSON.stringify(dep.source)};
+          const json = ${dep.source};
+          export default json;
         `
       } else {
         for (const [id, importPath] of dep.ids ?? []) {
@@ -304,7 +305,6 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
           })
           res.stream.end(contents)
         } else if (depCache.has(file)) {
-          console.log('will respond with', file)
           res.stream.respond({
             ...headers,
             'content-type': 'application/javascript',
