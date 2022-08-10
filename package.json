@@ -67,7 +67,7 @@
     "@typescript-eslint/parser": "5.31.0",
     "bunzee": "^1.0.0",
     "chokidar": "3.5.3",
-    "dokio": "^1.0.0",
+    "dokio": "^1.0.1",
     "dprint": "0.30.3",
     "eslint": "8.20.0",
     "eslint-config-html-jsx": "^1.0.0",
