@@ -1,5 +1,5 @@
 <h1>
-devito <a href="https://npmjs.org/package/devito"><img src="https://img.shields.io/badge/npm-v1.3.1-F00.svg?colorA=000"/></a> <a href="src"><img src="https://img.shields.io/badge/loc-412-FFF.svg?colorA=000"/></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F0B.svg?colorA=000"/></a>
+devito <a href="https://npmjs.org/package/devito"><img src="https://img.shields.io/badge/npm-v1.3.2-F00.svg?colorA=000"/></a> <a href="src"><img src="https://img.shields.io/badge/loc-420-FFF.svg?colorA=000"/></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F0B.svg?colorA=000"/></a>
 </h1>
 
 <p></p>
