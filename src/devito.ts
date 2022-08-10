@@ -88,24 +88,32 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
   }
 
   // open markdown files
-  if (entryFile.endsWith('.md')) {
+  const isMd = entryFile.endsWith('.md')
+  if (isMd) {
     headers = {
       'access-control-allow-origin': '*',
       ':status': 200,
     }
     const MarkdownIt = (await import('markdown-it')).default
-    const html = MarkdownIt({ html: true }).render(fs.readFileSync(entryFile, 'utf-8'), {})
     const cssPath = require.resolve('github-markdown-css')
     depCache.set(cssPath, { ids: [], source: fs.readFileSync(cssPath, 'utf-8') })
-    depCache.set(entryFile, {
-      ids: [['github-markdown-css', cssPath]],
-      source: `
+    const updateMd = () => {
+      const html = MarkdownIt({ html: true }).render(fs.readFileSync(entryFile, 'utf-8'), {})
+      depCache.set(entryFile, {
+        ids: [['github-markdown-css', cssPath]],
+        source: `
         import 'github-markdown-css'
         document.body.classList.add('markdown-body')
         document.body.style = 'max-width: 830px; margin: 0 auto;'
         document.body.innerHTML = ${JSON.stringify(html)}
-      `,
+        `,
+      })
+    }
+    fs.watch(entryFile, () => {
+      updateMd()
+      reload()
     })
+    updateMd()
   }
 
   // traverse dependencies
@@ -130,7 +138,9 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
   // importmap
   const importmap: Record<string, string> = {}
 
+  // fs watchers
   const watchers: fs.FSWatcher[] = []
+
   const updateCache = (rootFilter = '/', force = false) => {
     for (const [depPath, dep] of depCache) {
       if (!depPath.startsWith(rootFilter)) continue
@@ -172,7 +182,7 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
     }
     log(depCache.size, 'dependencies cached')
 
-    if (options.watch) {
+    if (options.watch && !isMd) {
       watchers.splice(0).forEach(x => x.close())
       const watchDirs = new Set([...depCache.keys()].map(x => path.dirname(x)))
       for (const dir of watchDirs) {
