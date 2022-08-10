@@ -89,7 +89,7 @@
     "each-dep": "^1.1.0",
     "esbuild": "0.14.53",
     "event-toolkit": "^1.0.2",
-    "everyday-node": "^1.1.0",
+    "everyday-node": "^1.2.0",
     "everyday-utils": "^1.1.0",
     "find-free-ports": "3.0.0",
     "github-markdown-css": "5.1.0",
