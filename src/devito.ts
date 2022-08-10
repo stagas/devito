@@ -24,6 +24,7 @@ export class DevitoOptions {
   entrySource?: string
   alias?: EachDepOptions['alias']
   depCache = new Map() as EachDepOptions['cache']
+  forceExit = false
 
   constructor(options: Partial<DevitoOptions> = {}) {
     Object.assign(this, options)
@@ -476,7 +477,7 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
   const url = `https://localhost:${addr.port}`
   log('server listening', { root: options.rootPath.replace(os.homedir(), '~'), addr, url })
 
-  const close = gracefulShutdown(server, { forceExit: false })
+  const close = gracefulShutdown(server, { forceExit: options.forceExit })
 
   return { devito: server, url, analyze, updateCache, close }
 }

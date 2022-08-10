@@ -3,6 +3,14 @@
 import { decarg } from 'decarg'
 import { devito, DevitoOptions } from '.'
 
-const options = decarg(new DevitoOptions())!
+const options = decarg(new DevitoOptions({ forceExit: true }))!
 
-devito(options)
+const main = async () => {
+  const { close } = await devito(options)
+  process.on('SIGINT', () => {
+    console.log('shutting down server')
+    close()
+  })
+}
+
+main()
