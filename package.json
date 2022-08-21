@@ -2,7 +2,7 @@
   "name": "devito",
   "author": "stagas",
   "short": "stagas/devito",
-  "description": "Fast http/2 web dev server",
+  "description": "Fast web dev server",
   "version": "2.0.0",
   "license": "MIT",
   "repository": {
@@ -79,7 +79,7 @@
     "rimraf": "3.0.2",
     "swcno": "0.1.1",
     "typescript": "4.7.3",
-    "utr": "^1.2.1"
+    "utr": "^1.3.1"
   },
   "dependencies": {
     "@stagas/chalk": "^5.0.1",

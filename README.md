@@ -4,7 +4,7 @@ devito <a href="https://npmjs.org/package/devito"><img src="https://img.shields.
 
 <p></p>
 
-Fast http/2 web dev server
+Fast web dev server
 
 <h4>
 <table><tr><td title="Triple click to select and copy paste">
