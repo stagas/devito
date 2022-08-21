@@ -23,7 +23,7 @@ export class DevitoOptions {
   @arg('--port', 'Starting port') startPort = 3000
   @arg('--ip', 'IP address') ipAddress = '0.0.0.0'
   @arg('--cert', 'Certificates path') cert: string | ServerOptions = process.env.SSL_CERTS_DEVITO
-    ?? path.join(os.homedir(), '.ssl-certs', 'devito.test')
+    ?? path.join('~', '.ssl-certs', 'devito.test')
   /** `homedir` is the common ancestor used to resolve dependency paths relative to,
    * in order for sourcemaps to work and also the "open in editor" feature
    * when clicking at the filename in devtools console output.
@@ -46,7 +46,6 @@ export class DevitoOptions {
 
   constructor(options: Partial<DevitoOptions> = {}) {
     Object.assign(this, options)
-    if (this.homedir === '~') this.homedir = os.homedir()
     if (this.file?.endsWith('/')) this.file = this.file.slice(0, -1)
   }
 
@@ -61,6 +60,9 @@ export class DevitoOptions {
 
 export async function devito(partialOptions: Partial<DevitoOptions>) {
   const options = new DevitoOptions(partialOptions)
+  if (options.homedir === '~') options.homedir = os.homedir()
+  if (typeof options.cert === 'string' && options.cert.startsWith('~'))
+    options.cert = options.cert.replace('~', os.homedir())
 
   const exts = ['.ts', '.mts', '.tsx', '.mtsx', '.mjs', '.mjsx', '.jsx', '.js', '.md', '.html']
 

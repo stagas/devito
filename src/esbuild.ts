@@ -168,7 +168,7 @@ export class Esbuild {
     this.deferred.resolve()
   }
 
-  rebuild = queue.debounce(5).not.first.not.next.last(function(this: Esbuild) {
+  rebuild: () => Promise<void> = queue.debounce(5).not.first.not.next.last(function(this: Esbuild) {
     if (this.options.entrySource) {
       const deferred = Deferred<string>()
       deferred.resolve(this.options.entrySource)
