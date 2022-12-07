@@ -1,13 +1,14 @@
+import { fsStats } from 'easy-https-server'
 import { BuildOptions } from 'esbuild'
 import { Deferred, KeyedCache } from 'everyday-utils'
 import * as fs from 'fs'
-import * as os from 'os'
-import { importMetaCache } from './esbuild-plugins'
+import { hmrCache, importMetaCache } from './esbuild-plugins'
 import { esbuildCache } from './request-handler'
 
 export const FS_PREFIX = '@fs'
 
 export const caches = new Set<Map<any, any>>()
+caches.add(fsStats.cache)
 
 export const esbuildCommonOptions: BuildOptions = {
   write: false,
@@ -24,41 +25,13 @@ export const esbuildCommonOptions: BuildOptions = {
     '.mtsx': 'tsx',
     '.mjsx': 'jsx',
     '.svg': 'dataurl',
+    '.wasm': 'binary',
   },
-}
-
-export function link(earlyHints: string[] | Set<string>) {
-  return (earlyHints as Set<string>).size ?? (earlyHints as string[]).length
-    ? {
-      link: [...earlyHints].join(', '),
-    }
-    : {}
-}
-
-export function lastModified(x: Date | number) {
-  return {
-    'last-modified': new Date(x).toUTCString(),
-  }
-}
-
-export function etag(stat: { mtime: Date; size: number }) {
-  const mtime = stat.mtime.getTime().toString(16)
-  const size = stat.size.toString(16)
-  return '"' + size + '-' + mtime + '"'
-}
-
-export function expires(x: Date | number) {
-  return {
-    expires: new Date(x).toUTCString(),
-  }
 }
 
 export function roundSeconds(x: Date | number) {
   return Math.round(+x / 1000) * 1000
 }
-
-export const fsStats = KeyedCache((pathname: string) => fs.promises.stat(pathname))
-caches.add(fsStats.cache)
 
 export interface ResourceCacheItem<T> {
   stats: fs.Stats
@@ -77,16 +50,17 @@ export function clearDevitoCaches() {
 }
 
 export function forgetFile(pathname: string) {
-  console.log(
-    'caches:',
-    esbuildCache?.cache.has(pathname),
-    importMetaCache?.cache.has(pathname),
-    fsStats.cache.has(pathname),
-    readFile.cache.has(pathname)
-  )
+  // console.log(
+  //   'caches:',
+  //   esbuildCache?.cache.has(pathname),
+  //   importMetaCache?.cache.has(pathname),
+  //   fsStats.cache.has(pathname),
+  //   readFile.cache.has(pathname)
+  // )
 
   esbuildCache?.cache.delete(pathname)
   importMetaCache?.cache.delete(pathname)
+  hmrCache?.cache.delete(pathname)
   fsStats.cache.delete(pathname)
   readFile.cache.delete(pathname)
 }
@@ -123,14 +97,3 @@ export function createResourceCache<T>(
 
 export const readFile = KeyedCache(pathname => fs.promises.readFile(pathname, 'utf-8'))
 caches.add(readFile.cache)
-
-export function getNetworkAddress(options: { port: number }) {
-  for (const addresses of Object.values(os.networkInterfaces())) {
-    for (const address of addresses!) {
-      const { address: host, family, internal } = address
-      if (!internal && family === 'IPv4') {
-        return `https://${host}:${options.port}`
-      }
-    }
-  }
-}

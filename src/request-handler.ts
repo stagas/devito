@@ -1,31 +1,29 @@
 import chalk from '@stagas/chalk'
 import { eachDep, EachDepOptions } from 'each-dep'
+import { contentType, etag, fsStats, HttpContext, print, serveStatic, startTask } from 'easy-https-server'
 import { build } from 'esbuild'
 import alias from 'esbuild-plugin-alias'
 import { discoverFileWithSuffixes, exists } from 'everyday-node'
 import * as fs from 'fs'
 import { OutgoingHttpHeaders } from 'http'
 import openInEditor from 'open-in-editor'
+import { applySourceMaps } from 'apply-sourcemaps'
 import * as os from 'os'
 import * as path from 'path'
 
 import {
   createResourceCache,
   esbuildCommonOptions,
-  etag,
   forgetFile,
   FS_PREFIX,
-  fsStats,
   // link,
   ResourceCache,
 } from './core'
 import { DevitoOptions } from './devito'
 import { Esbuild, watchMetafile } from './esbuild'
-import { css, importMetaUrl, importResolve, pipe } from './esbuild-plugins'
-import { HttpContext } from './https-server'
+import { css, hmr, importMetaUrl, importResolve, pipe } from './esbuild-plugins'
 import { mainHtml } from './main-html'
 import { SSE } from './sse'
-import { contentType, print, startTask } from './util'
 
 export let esbuildCache: ResourceCache<Uint8Array>
 
@@ -88,25 +86,32 @@ export async function requestHandler(
     esbuild.consume(esbuild.result)
   }
 
+  const plugins = [] as any
+
+  if (!options.bundle) plugins.push(importResolve)
+  if (options.hmr) plugins.push(hmr)
+  plugins.push(importMetaUrl)
+
   const esbuildWatchers = new Map<string, fs.FSWatcher[]>()
   esbuildCache = createResourceCache(
     fsStats,
     async (pathname: string) => {
+      let tsconfig: string | undefined = path.join(options.rootPath, 'tsconfig.json')
+      if (!(await exists(tsconfig))) tsconfig = void 0
       const result = await build({
         ...esbuildCommonOptions,
         bundle: options.bundle,
         entryPoints: [pathname],
         sourceRoot: `/${FS_PREFIX}`,
         absWorkingDir: options.homedir,
-        tsconfig: path.join(options.rootPath, 'tsconfig.json'),
-
+        tsconfig,
         plugins: [
-          !options.bundle
+          plugins.length > 1
             ? pipe({
               filter: /\.m?[jt]sx?$/,
-              plugins: [importResolve, importMetaUrl] as any,
+              plugins
             })
-            : importMetaUrl,
+            : plugins[0],
           css,
           options.alias && alias(options.alias),
         ].filter(Boolean),
@@ -157,6 +162,10 @@ export async function requestHandler(
       )
   }
 
+  // store
+
+  const store = new Map<string, string>()
+
   // caches
 
   const caches = new Map<string, { 'cache-control': string; etag: string }>()
@@ -190,61 +199,99 @@ export async function requestHandler(
 
     let pathname = req.url.split('?')[0]
 
-    const serveStatic = async (pathname: string) => {
-      const isFound = await exists(pathname)
-      if (!isFound) {
-        res.writeHead(404)
-        res.end()
+    // const serveStatic = async (pathname: string) => {
+    //   const isFound = await exists(pathname)
+    //   if (!isFound) {
+    //     res.writeHead(404)
+    //     res.end()
+    //     return
+    //   }
+
+    //   const stat = await fsStats(pathname)
+    //   if (!stat.isFile()) {
+    //     res.writeHead(404)
+    //     res.end()
+    //     return
+    //   }
+
+    //   const cacheControl = {
+    //     'cache-control': cache('public, max-age=720'),
+    //     etag: etag(stat),
+    //   }
+
+    //   const headers = {
+    //     ...commonHeaders,
+    //     ...cacheControl,
+    //     ...contentType(pathname),
+    //   }
+
+    //   if (ifNoneMatch && ifNoneMatch === cacheControl.etag) {
+    //     res.writeHead(304, headers)
+    //     res.end()
+    //     return
+    //   }
+
+    //   res.writeHead(200, {
+    //     ...headers,
+    //     'content-size': stat.size,
+    //   })
+
+    //   const fileStream = fs.createReadStream(pathname)
+
+    //   fileStream.pipe(res)
+    // }
+
+    if (pathname === '/store') {
+      const key = req.url.split('?key=')[1]
+      if (req.method === 'POST') {
+
+        let data = ''
+        req.setEncoding('utf-8')
+        req.on('data', (chunk) => {
+          data += chunk
+        })
+        req.on('end', () => {
+          store.set(key, data)
+          res.writeHead(201)
+          res.end()
+        })
         return
       }
 
-      const stat = await fsStats(pathname)
-      if (!stat.isFile()) {
-        res.writeHead(404)
-        res.end()
+      else if (req.method === 'GET') {
+        if (store.has(key)) {
+          const json = store.get(key)!
+          res.writeHead(200, {
+            'content-type': 'application/json',
+            'content-size': Buffer.byteLength(json)
+          })
+          res.end(json)
+        } else {
+          res.writeHead(404)
+          res.end()
+        }
         return
       }
 
-      const cacheControl = {
-        'cache-control': cache('public, max-age=720'),
-        etag: etag(stat),
-      }
-
-      const headers = {
-        ...commonHeaders,
-        ...cacheControl,
-        ...contentType(pathname),
-      }
-
-      if (ifNoneMatch && ifNoneMatch === cacheControl.etag) {
-        res.writeHead(304, headers)
+      else {
+        res.writeHead(405)
         res.end()
-        return
       }
-
-      res.writeHead(200, {
-        ...headers,
-        'content-size': stat.size,
-      })
-
-      const fileStream = fs.createReadStream(pathname)
-
-      fileStream.pipe(res)
     }
 
-    //
-    // POST /~/file[:line[:col]]
-    //
-    // Opens file in editor.
-    //
-
     if (req.method === 'POST') {
-      const fsPath = req.url.slice(FS_PREFIX.length + 1)
-      const pathname = path.join(os.homedir(), fsPath)
+      //
+      // POST /~/file[:line[:col]]
+      //
+      // Opens file in editor.
+      //
 
-      if (req.url.startsWith(`/${FS_PREFIX}/`) && (await exists(pathname.split(':')[0]))) {
+      const fsPath = req.url.slice(FS_PREFIX.length + 1)
+      const filename = path.join(os.homedir(), fsPath)
+
+      if (req.url.startsWith(`/${FS_PREFIX}/`) && (await exists(filename.split(':')[0]))) {
         try {
-          await editor.open(pathname)
+          await editor.open(filename)
         } catch (error) {
           res.writeHead(500)
           res.end((error as Error).message)
@@ -255,9 +302,23 @@ export async function requestHandler(
         return
       }
 
-      print('404', pathname.replace(os.homedir(), `/${FS_PREFIX}`))
+      print('404', filename.replace(os.homedir(), `/${FS_PREFIX}`))
       res.writeHead(404)
       res.end()
+      return
+    }
+
+    if (pathname === '/apply-sourcemaps') {
+      const queryString = decodeURIComponent(req.url.split('?')[1])
+      const payload = await applySourceMaps(queryString, url => url)
+
+      res.writeHead(200, {
+        'content-type': 'text/plain',
+        'content-size': Buffer.byteLength(payload),
+      })
+
+      res.end(payload)
+
       return
     }
 
@@ -365,8 +426,8 @@ export async function requestHandler(
         }
 
         async function cachedResponse(event) {
-          const response = await caches.match(event.request);
-          if (response) return response;
+          // const response = await caches.match(event.request);
+          // if (response) return response;
 
           return fetch(event.request, { cache: 'reload' }).then(response => {
             let responseClone = response.clone()
@@ -415,25 +476,45 @@ export async function requestHandler(
       })
 
       res.end(
+        // (options.hmr ? '' :
         `
         navigator.serviceWorker.register('/devito-sw.js');
         `
-          + (!options.watch
+        // )
+        + (!options.watch
+          ? ''
+          : `
+        const es = new EventSource('/onreload');
+        ${options.quiet
             ? ''
             : `
-        const es = new EventSource('/onreload');
-        ${
-              options.quiet
-                ? ''
-                : `
         es.onopen = () => console.warn('live-reload started')
         `
-            }
+          }
         es.onmessage = () => es.onmessage = async ({ data }) => {
+          ${options.hmr ? `
+
+          const message = JSON.parse(data)
+
+          if (message.type === 'start') {
+            es.close()
+            setTimeout(() => {
+              location.reload()
+            }, 50)
+            return
+          }
+
+          console.log(message.type, message.payload)
+          window.postMessage(message)
+
+          ` : `
+
           es.close()
           setTimeout(() => {
             location.reload()
-          }, 10)
+          }, 50)
+
+          `}
         }
         `)
       )
@@ -528,7 +609,7 @@ export async function requestHandler(
         const { stats, payload } = await esbuildCache.getOrUpdate(pathname)
 
         const cacheControl = {
-          'cache-control': cache('public, max-age=0'),
+          'cache-control': cache('public, no-store'),
           etag: etag(stats),
         }
 
@@ -564,13 +645,16 @@ export async function requestHandler(
     // Raw static files.
     //
 
-    await serveStatic(path.join(options.rootPath, pathname))
+    await serveStatic(req, res, path.join(options.rootPath, pathname), {
+      cache: cache('public, max-age=720'),
+      outgoingHeaders: commonHeaders,
+    })
   }
 
   // start responding to requests
 
   for await (const { req, res } of request) {
-    print(req.method, chalk.whiteBright(req.url))
+    print(req.method, chalk.white(req.url))
     respond(req, res)
   }
 }

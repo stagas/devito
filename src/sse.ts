@@ -1,5 +1,4 @@
-import { HttpContext } from './https-server'
-import { print } from './util'
+import { HttpContext, print, logOptions } from 'easy-https-server'
 
 export interface SSEContext {
   start: (req: HttpContext['req'], res: HttpContext['res']) => void
@@ -27,11 +26,12 @@ export function SSE(): SSEContext {
 
   function start(req: HttpContext['req'], res: HttpContext['res']) {
     clients.add(res)
-    print('SSE', 'open', req.socket.id)
+    print('SSE', 'open', req.socket.id, logOptions.extraInfo = `[${clients.size} clients]`)
 
     res.once('close', () => {
-      print('SSE', 'close', req.socket.id)
       clients.delete(res)
+      print('SSE', 'close', req.socket.id, logOptions.extraInfo = `[${clients.size} clients]`)
+
       res.end()
     })
 

@@ -1,9 +1,11 @@
+import { fsStats } from 'easy-https-server'
 import { OnLoadArgs, OnLoadOptions, OnLoadResult, Plugin } from 'esbuild'
 import * as fs from 'fs'
 import * as path from 'path'
-import { createResourceCache, FS_PREFIX, fsStats, readFile, ResourceCache } from './core'
+import { createResourceCache, FS_PREFIX, readFile, ResourceCache } from './core'
 
 export let importMetaCache: ResourceCache<OnLoadResult>
+export let hmrCache: ResourceCache<OnLoadResult>
 export let cssCache: ResourceCache<OnLoadResult>
 let homedir: string
 let alias: Record<string, string> | void
@@ -22,6 +24,17 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
       `(location.origin === 'null' ? new URL(location.ancestorOrigins[0]).origin : location.origin) + "${importMetaPathname}"`
 
     contents = contents.replaceAll('import.meta.url', importMetaUrl)
+
+    return {
+      contents,
+      loader: ((loaders as any)[path.extname(pathname)] ?? 'js') as 'js',
+    } as OnLoadResult
+  })
+
+  hmrCache = createResourceCache(fsStats, async (pathname: string, contents?: string) => {
+    contents ??= await readFile(pathname)
+
+    contents = `export const _url = import.meta.url;${contents}`
 
     return {
       contents,
@@ -49,6 +62,24 @@ export const importMetaUrl = {
   setup(build, { transform } = {} as any) {
     const transformContents = async ({ args, contents }: { args: OnLoadArgs; contents: string }) => {
       const item = await importMetaCache.getOrUpdate(args.path, contents)
+      return item.payload
+    }
+
+    if (transform) return transformContents(transform)
+
+    build.onLoad({ filter: /\.m?[jt]sx?$/ }, async args => {
+      const contents = await readFile(args.path)
+
+      return transformContents({ args, contents })
+    })
+  },
+} as Plugin
+
+export const hmr = {
+  name: 'hmr',
+  setup(build, { transform } = {} as any) {
+    const transformContents = async ({ args, contents }: { args: OnLoadArgs; contents: string }) => {
+      const item = await hmrCache.getOrUpdate(args.path, contents)
       return item.payload
     }
 
@@ -146,16 +177,16 @@ const discoverFile = async (
             try {
               const stat = await fs.promises.stat(index)
               if (stat.isFile()) return [x, index] as const
-            } catch {}
+            } catch { }
           }
           try {
             const pkg = JSON.parse(await fs.promises.readFile(path.join(filename, 'package.json'), 'utf-8'))
             const main = path.join(joined, pkg.module ?? pkg.main)
             const stat = await fs.promises.stat(main)
             if (stat.isFile()) return [x, main] as const
-          } catch {}
+          } catch { }
         }
-      } catch {}
+      } catch { }
     }
   } else {
     if (options.external) {
@@ -163,7 +194,7 @@ const discoverFile = async (
         const result = await importMetaResolve(x, `file://${resolved}`)
         const { pathname } = new URL(result)
         if (pathname.startsWith('/')) return [x, pathname] as const
-      } catch {}
+      } catch { }
     }
   }
   return [x, x]
@@ -201,7 +232,7 @@ export const importResolve = {
                 `/** @jsxImportSource ${id}`,
                 `/** @jsxImportSource /${FS_PREFIX}/${path.dirname(path.relative(homedir, pathname))}`
               )
-            } catch {}
+            } catch { }
           }
         }
       }

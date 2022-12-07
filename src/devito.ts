@@ -1,26 +1,30 @@
-import chalk from '@stagas/chalk'
 import { arg } from 'decarg'
+import {
+  createHttpsServer,
+  getAddress,
+  logOptions,
+  makeCert,
+  print,
+  printAddress,
+  readCert,
+  ServerOptions,
+} from 'easy-https-server'
 import { discoverFileWithSuffixes } from 'everyday-node'
 import * as fs from 'fs'
-import { ServerOptions } from 'https'
-import makeCert from 'make-cert'
 import * as os from 'os'
 import * as path from 'path'
-import qrcode from 'qrcode-terminal'
 
-import { getNetworkAddress } from './core'
 import { createEsbuild, Esbuild } from './esbuild'
 import { createEsbuildPluginCaches } from './esbuild-plugins'
-import { createHttpsServer } from './https-server'
 import { requestHandler } from './request-handler'
 import { SSE } from './sse'
-import { hr, logOptions, print } from './util'
 
 export class DevitoOptions {
   @arg('<file>', 'Entry point file.') file!: string
   @arg('--root', 'Root directory') root = '.'
   @arg('--host', 'Hostname') hostname = 'devito.test'
   @arg('--port', 'Starting port') startPort = 3000
+  @arg('--hmr', 'Hot module reload') hmr = false
   @arg('--ip', 'IP address') ipAddress = '0.0.0.0'
   @arg('--cert', 'Certificates path') cert: string | ServerOptions = process.env.SSL_CERTS_DEVITO
     ?? path.join('~', '.ssl-certs', 'devito.test')
@@ -80,14 +84,11 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
 
   const sse = SSE()
 
-  const keys: ServerOptions = typeof options.cert === 'object'
+  const keys = typeof options.cert === 'object'
     ? options.cert
     : options.cert === 'auto'
-    ? makeCert(options.hostname)
-    : {
-      cert: fs.readFileSync(options.cert + '.pem'),
-      key: fs.readFileSync(options.cert + '-key.pem'),
-    }
+      ? makeCert(options.hostname)
+      : readCert(options.cert)
 
   const { server, request } = createHttpsServer(keys)
 
@@ -95,15 +96,16 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
 
   options.port = await server.tryListen(options)
 
-  hr(chalk.blue)
-  const localAddress = `https://${options.hostname}:${options.port}`
-  const networkAddress = getNetworkAddress(options)
+  const { localAddress, networkAddress } = getAddress(options)
+
   logOptions.localAddress = localAddress
-  if (!options.quiet) {
-    qrcode.generate(networkAddress, { small: true })
-  }
-  print('LSN', chalk.yellow.underline(localAddress))
-  print('LSN', chalk.yellow.underline(networkAddress))
+
+  printAddress({
+    localAddress,
+    networkAddress,
+    qrcode: !options.quiet,
+  })
+
   print('OPN', options.file)
 
   return {

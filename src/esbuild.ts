@@ -5,7 +5,7 @@ import { Deferred } from 'everyday-utils'
 import * as fs from 'fs'
 import * as path from 'path'
 import { esbuildCommonOptions, FS_PREFIX, readFile } from './core'
-import { importMetaUrl, importResolve, markdown, pipe } from './esbuild-plugins'
+import { hmr, importMetaUrl, importResolve, markdown, pipe } from './esbuild-plugins'
 
 export interface EsbuildOptions {
   entryFile: string
@@ -15,6 +15,7 @@ export interface EsbuildOptions {
   bundle: boolean
   alias?: Record<string, string>
   inlineSourceMaps?: boolean
+  hmr?: boolean
   watch: boolean
   homedir: string
 }
@@ -63,7 +64,7 @@ export function watchMetafile(
 
 export class Esbuild {
   constructor(public options: EsbuildOptions) {
-    this.deferred.promise.catch(() => {})
+    this.deferred.promise.catch(() => { })
   }
 
   bundle: Record<string, Uint8Array> = {}
@@ -102,6 +103,12 @@ export class Esbuild {
     }
 
     try {
+      const plugins = [] as any
+
+      if (!this.options.bundle) plugins.push(importResolve)
+      if (this.options.hmr) plugins.push(hmr)
+      plugins.push(importMetaUrl)
+
       this.result = await build({
         ...esbuildCommonOptions,
         entryPoints: [this.options.entryFile],
@@ -112,19 +119,19 @@ export class Esbuild {
         sourcemap: this.options.inlineSourceMaps ? 'inline' : 'linked',
         absWorkingDir: this.options.homedir,
         plugins: [
-          !this.options.bundle
+          plugins.length > 1
             ? pipe({
               filter: /\.m?[jt]sx?$/,
-              plugins: [importResolve, importMetaUrl] as any,
+              plugins
             })
-            : importMetaUrl,
+            : plugins[0],
           markdown,
           this.options.alias && alias(this.options.alias),
         ].filter(Boolean),
       })
 
       return this.result
-    } catch {}
+    } catch { }
   }
 
   running = false
@@ -163,12 +170,12 @@ export class Esbuild {
           size: 0,
         }
       }
-    } catch {}
+    } catch { }
 
     this.deferred.resolve()
   }
 
-  rebuild: () => Promise<void> = queue.debounce(5).not.first.not.next.last(function(this: Esbuild) {
+  rebuild: () => Promise<void> = queue.debounce(5).not.first.not.next.last(function (this: Esbuild) {
     if (this.options.entrySource) {
       const deferred = Deferred<string>()
       deferred.resolve(this.options.entrySource)
@@ -178,10 +185,11 @@ export class Esbuild {
     this.defer()
     this.onbeforerebuild?.()
 
+    // TODO: display the .catch() error in the client
     if (this.options.entrySource) {
-      this.build().then(this.consume)
+      this.build().then(this.consume).catch(this.consume)
     } else {
-      this.result.rebuild!().then(this.consume)
+      this.result.rebuild!().then(this.consume).catch(this.consume)
     }
   })
 }
