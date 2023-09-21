@@ -5,10 +5,24 @@ import * as path from 'path'
 import { createResourceCache, FS_PREFIX, readFile, ResourceCache } from './core'
 
 export let importMetaCache: ResourceCache<OnLoadResult>
+export let loggerCache: ResourceCache<OnLoadResult>
 export let hmrCache: ResourceCache<OnLoadResult>
 export let cssCache: ResourceCache<OnLoadResult>
+export let d2Cache: ResourceCache<OnLoadResult>
 let homedir: string
 let alias: Record<string, string> | void
+
+export function logIt(kind: string, text: string) {
+  return (`
+;(() => {
+  var op, ops = log[${kind}](${text});
+  while (op = ops.shift()) console[op[0]](...op[1]);
+})();
+`).replaceAll(/(\s{2,}|\n)/gm, ' ')
+}
+
+const logExplicitReplaceString = logIt('"info"', '$<args>')
+const logCommentReplaceString = logIt('"$<op>"', '"$<text>"')
 
 export function createEsbuildPluginCaches(options: { homedir: string; alias?: Record<string, string> }) {
   homedir = options.homedir
@@ -31,10 +45,35 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
     } as OnLoadResult
   })
 
+  loggerCache = createResourceCache(fsStats, async (pathname: string, contents?: string) => {
+    contents ??= await readFile(pathname)
+
+    if (pathname.startsWith(process.cwd()) && !pathname.endsWith('.d.ts')) {
+      let prefix = ''
+      if (!contents.includes('log = logger')) {
+        prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
+      }
+      contents = `${prefix}${contents
+        .replace(/[^\.]log\((?<args>.+)\)/g, logExplicitReplaceString)
+        .replace(/\/\/!(?<op>[><:]) (?<text>.+)/g, logCommentReplaceString)
+        }`
+    }
+    // else if (!pathname.endsWith('.d.ts') && pathname.endsWith('.ts')) {
+    //   contents = `var log=new Proxy(()=>{},{});${contents}`
+    // }
+
+    return {
+      contents,
+      loader: ((loaders as any)[path.extname(pathname)] ?? 'js') as 'js',
+    } as OnLoadResult
+  })
+
   hmrCache = createResourceCache(fsStats, async (pathname: string, contents?: string) => {
     contents ??= await readFile(pathname)
 
-    contents = `export const _url = import.meta.url;${contents}`
+    if (contents.includes('export ') && contents.includes('hmr(')) {
+      contents = contents.replace('hmr(', 'hmr(import.meta.url,')
+    }
 
     return {
       contents,
@@ -61,7 +100,7 @@ export const importMetaUrl = {
   name: 'import-meta-url',
   setup(build, { transform } = {} as any) {
     const transformContents = async ({ args, contents }: { args: OnLoadArgs; contents: string }) => {
-      const item = await importMetaCache.getOrUpdate(args.path, contents)
+      const item = await importMetaCache.getOrUpdate(args.path, `${build.initialOptions.bundle}`, contents)
       return item.payload
     }
 
@@ -79,7 +118,25 @@ export const hmr = {
   name: 'hmr',
   setup(build, { transform } = {} as any) {
     const transformContents = async ({ args, contents }: { args: OnLoadArgs; contents: string }) => {
-      const item = await hmrCache.getOrUpdate(args.path, contents)
+      const item = await hmrCache.getOrUpdate(args.path, `${build.initialOptions.bundle}`, contents)
+      return item.payload
+    }
+
+    if (transform) return transformContents(transform)
+
+    build.onLoad({ filter: /\.m?[jt]sx?$/ }, async args => {
+      const contents = await readFile(args.path)
+
+      return transformContents({ args, contents })
+    })
+  },
+} as Plugin
+
+export const logger = {
+  name: 'logger',
+  setup(build, { transform } = {} as any) {
+    const transformContents = async ({ args, contents }: { args: OnLoadArgs; contents: string }) => {
+      const item = await loggerCache.getOrUpdate(args.path, `${build.initialOptions.bundle}`, contents)
       return item.payload
     }
 
@@ -97,7 +154,7 @@ export const css = {
   name: 'css',
   setup(build) {
     build.onLoad({ filter: /\.css$/ }, async args => {
-      const item = await cssCache.getOrUpdate(args.path)
+      const item = await cssCache.getOrUpdate(args.path, `${build.initialOptions.bundle}`)
       return item.payload
     })
   },
@@ -180,7 +237,7 @@ const discoverFile = async (
             } catch { }
           }
           try {
-            const pkg = JSON.parse(await fs.promises.readFile(path.join(filename, 'package.json'), 'utf-8'))
+            const pkg: any = JSON.parse(await fs.promises.readFile(path.join(filename, 'package.json'), 'utf-8'))
             const main = path.join(joined, pkg.module ?? pkg.main)
             const stat = await fs.promises.stat(main)
             if (stat.isFile()) return [x, main] as const
@@ -214,47 +271,49 @@ export const importResolve = {
 
     // Create a function and move all the content of your `onLoad` function in it, except the `readfile`.
     const transformContents = async ({ args, contents }: { args: OnLoadArgs; contents: string }) => {
-      // It receives an object as an argument containing both the standard arguments of the `onLoad` function
-      // and the `contents` of the previous plugin or file.
+      if (!build.initialOptions.bundle) {
+        // It receives an object as an argument containing both the standard arguments of the `onLoad` function
+        // and the `contents` of the previous plugin or file.
 
-      if (args.path.endsWith('x')) {
-        const jsx = [...contents.matchAll(jsxImportSourceRegExp)]
-          .map(x => x.groups?.id).filter(Boolean)
+        if (args.path.endsWith('x')) {
+          const jsx = [...contents.matchAll(jsxImportSourceRegExp)]
+            .map(x => x.groups?.id).filter(Boolean)
 
-        if (jsx.length) {
-          const importMetaResolve = (await eval('import(\'import-meta-resolve\')')).resolve
-          for (const id of jsx) {
-            const runtime = `${id}/jsx-runtime`
-            try {
-              const result = await importMetaResolve(runtime, `file://${path.dirname(args.path)}`)
-              const { pathname } = new URL(result)
-              contents = contents.replace(
-                `/** @jsxImportSource ${id}`,
-                `/** @jsxImportSource /${FS_PREFIX}/${path.dirname(path.relative(homedir, pathname))}`
-              )
-            } catch { }
+          if (jsx.length) {
+            const importMetaResolve = (await eval('import(\'import-meta-resolve\')')).resolve
+            for (const id of jsx) {
+              const runtime = `${id}/jsx-runtime`
+              try {
+                const result = await importMetaResolve(runtime, `file://${path.dirname(args.path)}`)
+                const { pathname } = new URL(result)
+                contents = contents.replace(
+                  `/** @jsxImportSource ${id}`,
+                  `/** @jsxImportSource /${FS_PREFIX}/${path.dirname(path.relative(homedir, pathname))}`
+                )
+              } catch { }
+            }
           }
         }
-      }
 
-      const resolveDir = path.dirname(args.path)
-      const ids = parseIds(contents)
-      for (const id of ids) {
-        let [, result] = await discoverFile(resolveDir, id, { external: true, alias })
+        const resolveDir = path.dirname(args.path)
+        const ids = parseIds(contents)
+        for (const id of ids) {
+          let [, result] = await discoverFile(resolveDir, id, { external: true, alias })
 
-        let pathname: string
-        if (id.startsWith('.')) {
-          result = path.resolve(resolveDir, result)
+          let pathname: string
+          if (id.startsWith('.')) {
+            result = path.resolve(resolveDir, result)
+          }
+          if (result.startsWith('/')) {
+            pathname = `/${FS_PREFIX}/${path.relative(homedir, result)}`
+          } else {
+            pathname = result
+          }
+
+          contents = contents
+            .replaceAll(`'${id}'`, `'${pathname}'`)
+            .replaceAll(`"${id}"`, `"${pathname}"`)
         }
-        if (result.startsWith('/')) {
-          pathname = `/${FS_PREFIX}/${path.relative(homedir, result)}`
-        } else {
-          pathname = result
-        }
-
-        contents = contents
-          .replaceAll(`'${id}'`, `'${pathname}'`)
-          .replaceAll(`"${id}"`, `"${pathname}"`)
       }
 
       return {

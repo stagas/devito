@@ -1,11 +1,12 @@
-import { build, BuildResult, Metafile } from 'esbuild'
+import { BuildContext, BuildResult, Metafile, context } from 'esbuild'
 import alias from 'esbuild-plugin-alias'
 import { queue } from 'event-toolkit'
 import { Deferred } from 'everyday-utils'
 import * as fs from 'fs'
 import * as path from 'path'
-import { esbuildCommonOptions, FS_PREFIX, readFile } from './core'
-import { hmr, importMetaUrl, importResolve, markdown, pipe } from './esbuild-plugins'
+import { FS_PREFIX, esbuildCommonOptions, readFile } from './core'
+import { d2Plugin } from './d2-plugin'
+import { hmr, importMetaUrl, importResolve, logger, markdown, pipe } from './esbuild-plugins'
 
 export interface EsbuildOptions {
   entryFile: string
@@ -16,6 +17,8 @@ export interface EsbuildOptions {
   alias?: Record<string, string>
   inlineSourceMaps?: boolean
   hmr?: boolean
+  d2?: boolean
+  esm?: boolean
   watch: boolean
   homedir: string
 }
@@ -30,7 +33,7 @@ export function watchMetafile(
   metafile: Metafile,
   cb: (changed: Set<string>) => void,
 ) {
-  const debounced = queue.debounce(5).not.first.not.next.last(cb)
+  const debounced = queue.debounce(200).not.first.not.next.last(cb)
   const changed = new Set<string>()
 
   function collect(pathname: string) {
@@ -79,7 +82,7 @@ export class Esbuild {
       const watchDirs = watchMetafile(
         this.options.homedir,
         this.watchers,
-        this.result.metafile!,
+        this.result!.metafile!,
         async files => {
           this.onchange?.(files)
           this.rebuild()
@@ -90,30 +93,34 @@ export class Esbuild {
     return 0
   }
 
-  result!: BuildResult
+  ctx?: BuildContext
+  result?: BuildResult
   async build() {
-    if (this.result?.rebuild) {
-      this.result.rebuild.dispose()
+    if (this.ctx) {
+      this.ctx.dispose()
     }
 
     if (this.options.entrySource) {
       const deferred = Deferred<string>()
+      const accessTime = performance.now()
       deferred.resolve(this.options.entrySource)
-      readFile.cache.set(this.options.entryFile, deferred)
+      readFile.cache.set(this.options.entryFile, { deferred, accessTime })
     }
 
     try {
       const plugins = [] as any
 
+      plugins.push(logger)
       if (!this.options.bundle) plugins.push(importResolve)
       if (this.options.hmr) plugins.push(hmr)
-      plugins.push(importMetaUrl)
+      if (this.options.d2) plugins.push(d2Plugin)
+      if (!this.options.esm || this.options.bundle) plugins.push(importMetaUrl)
 
-      this.result = await build({
+      this.ctx = await context({
         ...esbuildCommonOptions,
         entryPoints: [this.options.entryFile],
         bundle: this.options.bundle,
-        incremental: this.options.entrySource ? false : true,
+        // incremental: this.options.entrySource ? false : true,
         sourceRoot: `/${FS_PREFIX}`,
         outfile: path.join(this.options.homedir, 'bundle.js'),
         sourcemap: this.options.inlineSourceMaps ? 'inline' : 'linked',
@@ -130,8 +137,15 @@ export class Esbuild {
         ].filter(Boolean),
       })
 
-      return this.result
-    } catch { }
+      const result = await this.ctx.rebuild().catch(console.warn)
+
+      if (result) {
+        this.result = result
+        return this.result
+      }
+    } catch (error) {
+      console.error(error)
+    }
   }
 
   running = false
@@ -151,7 +165,7 @@ export class Esbuild {
     }
 
     try {
-      this.result.metafile = result.metafile
+      if (this.result) this.result.metafile = result.metafile
       const mtime = new Date()
       for (const file of result.outputFiles) {
         const pathname = file.path.replace(this.options.homedir, '')
@@ -175,11 +189,12 @@ export class Esbuild {
     this.deferred.resolve()
   }
 
-  rebuild: () => Promise<void> = queue.debounce(5).not.first.not.next.last(function (this: Esbuild) {
+  rebuild: () => Promise<void> = queue.debounce(200).not.first.not.next.last(function (this: Esbuild) {
     if (this.options.entrySource) {
       const deferred = Deferred<string>()
+      const accessTime = performance.now()
       deferred.resolve(this.options.entrySource)
-      readFile.cache.set(this.options.entryFile, deferred)
+      readFile.cache.set(this.options.entryFile, { deferred, accessTime })
     }
 
     this.defer()
@@ -189,13 +204,13 @@ export class Esbuild {
     if (this.options.entrySource) {
       this.build().then(this.consume).catch(this.consume)
     } else {
-      this.result.rebuild!().then(this.consume).catch(this.consume)
+      this.ctx!.rebuild().then(this.consume).catch(this.consume)
     }
   })
 }
 
 export async function createEsbuild(options: EsbuildOptions) {
   const esbuild = new Esbuild(options)
-  await esbuild.build()
+  await esbuild.build().catch(console.warn)
   return esbuild
 }

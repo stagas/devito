@@ -1,9 +1,19 @@
 import * as path from 'path'
 import { FS_PREFIX } from './core'
+import { DevitoOptions } from './devito'
+
+export interface MainHtmlOptions extends DevitoOptions {
+  recorder: boolean
+  quiet: boolean
+  bundle: boolean
+  watch: boolean
+  homedir: string
+  alias?: Record<string, string>
+}
 
 export function mainHtml(
   title: string,
-  options: { quiet: boolean; bundle: boolean; watch: boolean; homedir: string; alias?: Record<string, string> },
+  options: MainHtmlOptions,
 ) {
   const importmap = Object.fromEntries(
     Object.entries(options.alias ?? {})
@@ -44,13 +54,18 @@ export function mainHtml(
   </style>
   <link rel="stylesheet" href="/bundle.css">
 </head><body><main></main>
-${
-    options.bundle ? '' : /*html*/ `<script type="importmap">
+${options.bundle ? '' : /*html*/ `<script type="importmap">
 {
   "imports": ${JSON.stringify(importmap, null, 2)}
 }
 </script>`
-  }
+    }
+${!options.recorder ? '' : /*html*/ `<script type="module">
+  import { DOMRecorder } from '/dom-recorder.js'
+  window.recorder = new DOMRecorder()
+  document.body.appendChild(window.recorder.el)
+</script>`}
+<script>Error.stackTraceLimit=100</script>
 <script src="/bundle.js" type="module"></script>
 <script src="/devito.js" type="module" defer async></script>
 </body></html>`

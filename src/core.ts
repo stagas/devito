@@ -13,12 +13,14 @@ caches.add(fsStats.cache)
 export const esbuildCommonOptions: BuildOptions = {
   write: false,
   metafile: true,
+  target: 'es2022',
   format: 'esm',
   jsx: 'automatic',
-  keepNames: true,
+  // keepNames: true,
   legalComments: 'inline',
   sourcemap: 'inline',
-  watch: false,
+  minifyWhitespace: false,
+  minifySyntax: true,
   loader: {
     '.mjs': 'js',
     '.mts': 'ts',
@@ -27,6 +29,13 @@ export const esbuildCommonOptions: BuildOptions = {
     '.svg': 'dataurl',
     '.wasm': 'binary',
   },
+}
+
+export function isWorker(pathname: string) {
+  return pathname.includes('-worker')
+    || pathname.includes('-worklet')
+    || pathname.includes('-processor')
+    || pathname.includes('-iframe')
 }
 
 export function roundSeconds(x: Date | number) {
@@ -40,7 +49,7 @@ export interface ResourceCacheItem<T> {
 
 export interface ResourceCache<T> {
   cache: Map<string, Deferred<ResourceCacheItem<T>>>
-  getOrUpdate(pathname: string, ...args: any[]): Promise<ResourceCacheItem<T>>
+  getOrUpdate(pathname: string, key: string, ...args: any[]): Promise<ResourceCacheItem<T>>
 }
 
 export function clearDevitoCaches() {
@@ -72,22 +81,28 @@ export function createResourceCache<T>(
   const cache = new Map<string, Deferred<ResourceCacheItem<T>>>()
   caches.add(cache)
 
-  const resolve = async (deferred: Deferred<ResourceCacheItem<T>>, pathname: string, ...args: any[]) => {
+  const resolve = async (deferred: Deferred<ResourceCacheItem<T>>, pathname: string, key: string, ...args: any[]) => {
     const stats = await getStats(pathname)
     if (deferred.value?.stats.mtime === stats.mtime) return
 
-    const payload = await getPayload(pathname, ...args)
-    deferred.resolve({ stats, payload })
+    try {
+      const payload = await getPayload(pathname, ...args)
+      deferred.resolve({ stats, payload })
+    }
+    catch (error) {
+      cache.delete(pathname + key)
+      deferred.reject(error as Error)
+    }
   }
 
   return {
     cache,
-    async getOrUpdate(pathname: string, ...args: any[]) {
-      let deferred = cache.get(pathname)
+    async getOrUpdate(pathname: string, key: string, ...args: any[]) {
+      let deferred = cache.get(pathname + key)
 
       if (!deferred) {
         cache.set(pathname, deferred = Deferred())
-        resolve(deferred, pathname, ...args)
+        resolve(deferred, pathname, key, ...args)
       }
 
       return deferred.promise
@@ -95,5 +110,5 @@ export function createResourceCache<T>(
   }
 }
 
-export const readFile = KeyedCache(pathname => fs.promises.readFile(pathname, 'utf-8'))
+export const readFile = KeyedCache(pathname => fs.promises.readFile(pathname as string, 'utf-8'))
 caches.add(readFile.cache)

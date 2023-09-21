@@ -16,4 +16,12 @@ const main = async () => {
   })
 }
 
+process.on('uncaughtException', (error) => {
+  console.warn(error)
+})
+
+process.on('unhandledRejection', (error) => {
+  console.warn(error)
+})
+
 main()

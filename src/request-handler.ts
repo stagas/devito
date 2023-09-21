@@ -8,22 +8,43 @@ import * as fs from 'fs'
 import { OutgoingHttpHeaders } from 'http'
 import openInEditor from 'open-in-editor'
 import { applySourceMaps } from 'apply-sourcemaps'
+import { serveD2, sseD2 } from './d2'
 import * as os from 'os'
 import * as path from 'path'
 
 import {
+  clearDevitoCaches,
   createResourceCache,
   esbuildCommonOptions,
   forgetFile,
   FS_PREFIX,
+  isWorker,
   // link,
   ResourceCache,
 } from './core'
 import { DevitoOptions } from './devito'
 import { Esbuild, watchMetafile } from './esbuild'
-import { css, hmr, importMetaUrl, importResolve, pipe } from './esbuild-plugins'
+import { css, hmr, importMetaUrl, importResolve, logger, pipe } from './esbuild-plugins'
 import { mainHtml } from './main-html'
 import { SSE } from './sse'
+import { d2Plugin } from './d2-plugin'
+
+const suffixes = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.mjs',
+  '.js',
+  '.jsx',
+  '.cjs',
+  '/index.ts',
+  '/index.tsx',
+  '/index.mts',
+  '/index.mjs',
+  '/index.js',
+  '/index.jsx',
+  '/index.cjs',
+]
 
 export let esbuildCache: ResourceCache<Uint8Array>
 
@@ -86,21 +107,47 @@ export async function requestHandler(
     esbuild.consume(esbuild.result)
   }
 
-  const plugins = [] as any
-
-  if (!options.bundle) plugins.push(importResolve)
-  if (options.hmr) plugins.push(hmr)
-  plugins.push(importMetaUrl)
-
   const esbuildWatchers = new Map<string, fs.FSWatcher[]>()
+
+  // const busy = new Set()
+
   esbuildCache = createResourceCache(
     fsStats,
     async (pathname: string) => {
       let tsconfig: string | undefined = path.join(options.rootPath, 'tsconfig.json')
       if (!(await exists(tsconfig))) tsconfig = void 0
+
+      // if (busy.has(pathname)) {
+      //   throw new Error('Busy')
+      // }
+
+      // busy.add(pathname)
+
+      const format = (
+        options.esm
+        || pathname.includes('dom-recorder')
+      )
+        && !isWorker(pathname)
+        ? 'esm'
+        : 'iife'
+
+      const bundle = isWorker(pathname) || options.bundle
+
+      const plugins = [] as any
+
+      plugins.push(logger)
+      if (!bundle) plugins.push(importResolve)
+      if (options.hmr) plugins.push(hmr)
+      if (options.d2) plugins.push(d2Plugin)
+      if (format !== 'esm' || bundle) plugins.push(importMetaUrl)
+
+      if (isWorker(pathname)) clearDevitoCaches()
+
+      // try {
       const result = await build({
         ...esbuildCommonOptions,
-        bundle: options.bundle,
+        format,
+        bundle,
         entryPoints: [pathname],
         sourceRoot: `/${FS_PREFIX}`,
         absWorkingDir: options.homedir,
@@ -117,7 +164,7 @@ export async function requestHandler(
         ].filter(Boolean),
       })
 
-      const [bundle] = result.outputFiles!
+      const [res] = result.outputFiles!
 
       if (options.watch) {
         let watchers = esbuildWatchers.get(pathname)
@@ -143,17 +190,19 @@ export async function requestHandler(
           }
         )
       }
-      return bundle.contents
+
+      return res.contents
+      // } finally {
+      //   busy.delete(pathname)
+      // }
     }
   )
-
-  // report
 
   const report = () => {
     if (esbuild)
       print(
         'INF',
-        Object.keys(esbuild.result.metafile?.inputs ?? {}).length,
+        Object.keys(esbuild.result?.metafile?.inputs ?? {}).length,
         'files bundled',
         esbuild.watchers.length,
         'dirs watching',
@@ -199,48 +248,37 @@ export async function requestHandler(
 
     let pathname = req.url.split('?')[0]
 
-    // const serveStatic = async (pathname: string) => {
-    //   const isFound = await exists(pathname)
-    //   if (!isFound) {
-    //     res.writeHead(404)
-    //     res.end()
-    //     return
-    //   }
+    function serveEntryPoint() {
+      startTask(true)
 
-    //   const stat = await fsStats(pathname)
-    //   if (!stat.isFile()) {
-    //     res.writeHead(404)
-    //     res.end()
-    //     return
-    //   }
+      const cacheControl = caches.get('/')!
 
-    //   const cacheControl = {
-    //     'cache-control': cache('public, max-age=720'),
-    //     etag: etag(stat),
-    //   }
+      const headers = {
+        ...commonHeaders,
+        ...cacheControl,
+      }
 
-    //   const headers = {
-    //     ...commonHeaders,
-    //     ...cacheControl,
-    //     ...contentType(pathname),
-    //   }
+      if (ifNoneMatch && ifNoneMatch === cacheControl.etag) {
+        res.writeHead(304, headers)
+        res.end()
+        return
+      }
 
-    //   if (ifNoneMatch && ifNoneMatch === cacheControl.etag) {
-    //     res.writeHead(304, headers)
-    //     res.end()
-    //     return
-    //   }
+      const title = path.relative(options.rootPath, options.entryFile)
+      const payload = mainHtml(title, options)
 
-    //   res.writeHead(200, {
-    //     ...headers,
-    //     'content-size': stat.size,
-    //   })
+      res.writeHead(200, {
+        ...headers,
+        'content-type': 'text/html',
+        'content-size': Buffer.byteLength(payload),
+      })
 
-    //   const fileStream = fs.createReadStream(pathname)
+      res.end(payload)
 
-    //   fileStream.pipe(res)
-    // }
+      return
+    }
 
+    // KV store
     if (pathname === '/store') {
       const key = req.url.split('?key=')[1]
       if (req.method === 'POST') {
@@ -266,7 +304,8 @@ export async function requestHandler(
             'content-size': Buffer.byteLength(json)
           })
           res.end(json)
-        } else {
+        }
+        else {
           res.writeHead(404)
           res.end()
         }
@@ -279,9 +318,34 @@ export async function requestHandler(
       }
     }
 
+    // applySourceMaps
+    if (pathname === '/apply-sourcemaps') {
+      if (req.method === 'POST') {
+
+        let data = ''
+        req.setEncoding('utf-8')
+        req.on('data', (chunk) => {
+          data += chunk
+        })
+        req.on('end', async () => {
+          const json = await applySourceMaps(data)
+          res.writeHead(200, {
+            'content-type': 'application/json',
+            'content-size': Buffer.byteLength(json)
+          })
+          res.end(json)
+        })
+        return
+      }
+      else {
+        res.writeHead(405)
+        res.end()
+      }
+    }
+
     if (req.method === 'POST') {
       //
-      // POST /~/file[:line[:col]]
+      // POST /@fs/file[:line[:col]]
       //
       // Opens file in editor.
       //
@@ -292,13 +356,16 @@ export async function requestHandler(
       if (req.url.startsWith(`/${FS_PREFIX}/`) && (await exists(filename.split(':')[0]))) {
         try {
           await editor.open(filename)
-        } catch (error) {
+        }
+        catch (error) {
           res.writeHead(500)
           res.end((error as Error).message)
           return
         }
-        res.writeHead(200)
-        res.end()
+        res.writeHead(200, {
+          'content-type': 'text/html'
+        })
+        res.end('<script>window.close()</script>')
         return
       }
 
@@ -341,40 +408,20 @@ export async function requestHandler(
       return
     }
 
+    if (req.url === '/dom-recorder.js') {
+      req.url = pathname = require.resolve('dom-recorder').replace(os.homedir(), `/${FS_PREFIX}`).replace('cjs', 'esm')
+    }
+
     //
     // GET / (home)
     //
 
     if (pathname === '/') {
       if (esbuild) {
-        startTask(true)
-
-        const cacheControl = caches.get('/')!
-
-        const headers = {
-          ...commonHeaders,
-          ...cacheControl,
-        }
-
-        if (ifNoneMatch && ifNoneMatch === cacheControl.etag) {
-          res.writeHead(304, headers)
-          res.end()
-          return
-        }
-
-        const title = path.relative(options.rootPath, options.entryFile)
-        const payload = mainHtml(title, options)
-
-        res.writeHead(200, {
-          ...headers,
-          'content-type': 'text/html',
-          'content-size': Buffer.byteLength(payload),
-        })
-
-        res.end(payload)
-
+        serveEntryPoint()
         return
-      } else {
+      }
+      else {
         const headers = {
           location: options.file,
         }
@@ -430,7 +477,9 @@ export async function requestHandler(
           // if (response) return response;
 
           return fetch(event.request, { cache: 'reload' }).then(response => {
-            let responseClone = response.clone()
+            if (!new URL(event.request.url).protocol.startsWith('http')) return response;
+
+            let responseClone = response.clone();
 
             caches.open('v1').then(function (cache) {
               cache.put(event.request, responseClone)
@@ -441,7 +490,7 @@ export async function requestHandler(
         }
 
         addEventListener('fetch', event => {
-          if (!started) return
+          // if (!started) return
 
           if (event.request.url.endsWith('.js')
           || event.request.url.endsWith('.js.map')
@@ -453,6 +502,15 @@ export async function requestHandler(
         });
       `)
 
+      return
+    }
+
+    //
+    // GET /d2
+    //
+
+    if (pathname.startsWith('/d2')) {
+      sseD2(req, res)
       return
     }
 
@@ -491,8 +549,12 @@ export async function requestHandler(
         es.onopen = () => console.warn('live-reload started')
         `
           }
+
+        let errors
+        let debounceReloadTimeout
         es.onmessage = () => es.onmessage = async ({ data }) => {
           ${options.hmr ? `
+          if (errors) errors.remove()
 
           const message = JSON.parse(data)
 
@@ -504,15 +566,75 @@ export async function requestHandler(
             return
           }
 
-          console.log(message.type, message.payload)
+          if (message.type === 'error') {
+            document.head.appendChild(Object.assign(document.createElement('style'), {
+              textContent: \`
+              .devito-errors {
+                position: fixed;
+                zIndex: 9999999;
+                left: 0;
+                bottom: 0;
+              }
+              .devito-error {
+                background: #000;
+                padding: 10px;
+                color: #fff;
+              }
+              .devito-error:hover {
+                text-decoration: underline;
+                cursor: pointer;
+              }
+              \`
+            }))
+
+            errors = Object.assign(document.createElement('div'), {
+              className: 'devito-errors'
+            })
+            document.body.appendChild(errors)
+
+            let i = 0
+
+            for (const e of message.payload) {
+              console.warn(e.text, e)
+
+              const url = location.origin + '/@fs/' + e.location.file + ':' + e.location.line + ':' + e.location.column
+
+              const smallUrl = e.location.file + ':' + e.location.line + ':' + e.location.column
+
+              const el = Object.assign(
+                document.createElement('pre'),
+                {
+                  className: 'devito-error',
+                  onclick: () => {
+                    fetch(url, { method: 'POST' })
+                  },
+                  innerHTML: e.text + '\\n\\nat ' + smallUrl + '</p>'
+                }
+              )
+
+              errors.appendChild(el)
+            }
+          }
+          else {
+            if (message.type === 'update') {
+              // noop
+            }
+            else {
+              console.log(message.type, message.payload)
+            }
+          }
+
           window.postMessage(message)
 
           ` : `
 
-          es.close()
-          setTimeout(() => {
-            location.reload()
-          }, 50)
+          clearTimeout(debounceReloadTimeout)
+          debounceReloadTimeout = setTimeout(() => {
+            es.close()
+            setTimeout(() => {
+              location.reload()
+            }, 50)
+          }, 200)
 
           `}
         }
@@ -531,9 +653,12 @@ export async function requestHandler(
 
       try {
         await esbuild.deferred.promise
-      } catch {
+      }
+      catch (e) {
+        const error: any = e
         res.writeHead(500)
         res.end()
+        sse.broadcast({ type: 'error', payload: 'errors' in error ? error.errors : [error] })
         return
       }
 
@@ -586,27 +711,30 @@ export async function requestHandler(
     //
 
     const isHome = req.url.startsWith(`/${FS_PREFIX}/`)
-    const isSourceCode = /.m?[jt]sx?$/.test(pathname)
+    const isSourceCode = /(\.m?[jt]sx?|\.json)$/.test(pathname)
     const isJsxImportSource = /jsx-runtime$/.test(pathname)
-    if (isHome || isSourceCode || isJsxImportSource) {
-      pathname = isHome ? pathname.slice(FS_PREFIX.length + 1) : pathname
-      pathname = path.join(isHome ? os.homedir() : options.rootPath, pathname)
 
-      if (isJsxImportSource) {
-        pathname = (await discoverFileWithSuffixes(pathname, [
-          '.ts',
-          '.mts',
-          '.mjs',
-          '.js',
-          '/index.ts',
-          '/index.mts',
-          '/index.mjs',
-          '/index.js',
-        ])) || pathname
+    pathname = isHome ? pathname.slice(FS_PREFIX.length + 1) : pathname
+    pathname = path.join(isHome ? os.homedir() : options.rootPath, pathname)
+
+    if (isSourceCode || (isHome && isJsxImportSource)) {
+      // if (isJsxImportSource) {
+      pathname = (await discoverFileWithSuffixes(pathname, suffixes)) || pathname
+      // }
+
+      if (!(await exists(pathname))) {
+        if (options.spa) {
+          serveEntryPoint()
+        }
+        else {
+          res.writeHead(404)
+          res.end()
+        }
+        return
       }
 
       try {
-        const { stats, payload } = await esbuildCache.getOrUpdate(pathname)
+        const { stats, payload } = await esbuildCache.getOrUpdate(pathname, `${isWorker(pathname)}`)
 
         const cacheControl = {
           'cache-control': cache('public, no-store'),
@@ -631,9 +759,13 @@ export async function requestHandler(
         })
 
         res.end(payload)
-      } catch {
+      }
+      catch (e) {
+        console.warn(e)
+        const error: any = e
         res.writeHead(500)
         res.end()
+        sse.broadcast({ type: 'error', payload: 'errors' in error ? error.errors : [error] })
       }
 
       return
@@ -645,10 +777,26 @@ export async function requestHandler(
     // Raw static files.
     //
 
-    await serveStatic(req, res, path.join(options.rootPath, pathname), {
-      cache: cache('public, max-age=720'),
-      outgoingHeaders: commonHeaders,
-    })
+    if (await exists(pathname)) {
+      if (pathname.endsWith('.d2')) {
+        serveD2(req, res, pathname)
+      }
+      else {
+        await serveStatic(req, res, pathname, {
+          cache: cache('public, max-age=720'),
+          outgoingHeaders: commonHeaders,
+        })
+      }
+    }
+    else {
+      if (options.spa) {
+        serveEntryPoint()
+      }
+      else {
+        res.writeHead(404)
+        res.end()
+      }
+    }
   }
 
   // start responding to requests
