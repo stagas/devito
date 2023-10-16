@@ -7,6 +7,7 @@ import * as path from 'path'
 import { FS_PREFIX, esbuildCommonOptions, readFile } from './core'
 import { d2Plugin } from './d2-plugin'
 import { hmr, importMetaUrl, importResolve, logger, markdown, pipe } from './esbuild-plugins'
+import civetPlugin from '@danielx/civet/esbuild-plugin'
 
 export interface EsbuildOptions {
   entryFile: string
@@ -21,6 +22,7 @@ export interface EsbuildOptions {
   esm?: boolean
   watch: boolean
   homedir: string
+  logger: boolean
 }
 
 /**
@@ -126,10 +128,12 @@ export class Esbuild {
         sourcemap: this.options.inlineSourceMaps ? 'inline' : 'linked',
         absWorkingDir: this.options.homedir,
         plugins: [
+          civetPlugin(),
           plugins.length > 1
             ? pipe({
               filter: /\.m?[jt]sx?$/,
-              plugins
+              plugins,
+              logger: this.options.logger
             })
             : plugins[0],
           markdown,

@@ -11,6 +11,7 @@ import { applySourceMaps } from 'apply-sourcemaps'
 import { serveD2, sseD2 } from './d2'
 import * as os from 'os'
 import * as path from 'path'
+import civetPlugin from '@danielx/civet/esbuild-plugin'
 
 import {
   clearDevitoCaches,
@@ -37,6 +38,7 @@ const suffixes = [
   '.js',
   '.jsx',
   '.cjs',
+  '.civet',
   '/index.ts',
   '/index.tsx',
   '/index.mts',
@@ -153,10 +155,12 @@ export async function requestHandler(
         absWorkingDir: options.homedir,
         tsconfig,
         plugins: [
+          civetPlugin(),
           plugins.length > 1
             ? pipe({
               filter: /\.m?[jt]sx?$/,
-              plugins
+              plugins,
+              logger: options.logger
             })
             : plugins[0],
           css,
@@ -534,21 +538,14 @@ export async function requestHandler(
       })
 
       res.end(
-        // (options.hmr ? '' :
         `
         navigator.serviceWorker.register('/devito-sw.js');
         `
-        // )
-        + (!options.watch
-          ? ''
-          : `
+        + (!options.watch ? '' : `
         const es = new EventSource('/onreload');
-        ${options.quiet
-            ? ''
-            : `
-        es.onopen = () => console.warn('live-reload started')
-        `
-          }
+        ${options.quiet ? '' : `
+        es.onopen = () => console.log('live-reload started')
+        `}
 
         let errors
         let debounceReloadTimeout

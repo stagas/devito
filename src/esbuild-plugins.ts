@@ -14,16 +14,18 @@ let alias: Record<string, string> | void
 
 export function logIt(kind: string, text: string) {
   return (`
-;(() => {
+;(function _logcall() {
   var op, ops = log[${kind}](${text});
   while (op = ops.shift()) console[op[0]](...op[1]);
-})();
+}).call(this);
 `).replaceAll(/(\s{2,}|\n)/gm, ' ')
 }
 
-const logExplicitReplaceString = logIt('"info"', '$<args>')
+const logExplicitReplaceString = logIt('"info$<cmd>"', '$<args>')
 const logCommentReplaceString = logIt('"$<op>"', '"$<text>"')
-
+const logActive = /^log\.active/m
+const logRegExp = /[^\.]log(?<cmd>\.pretty)?\((?<args>.+)\)/g
+const logCommentRegExp = /\/\/!(?<op>[><:]) (?<text>.+)/g
 export function createEsbuildPluginCaches(options: { homedir: string; alias?: Record<string, string> }) {
   homedir = options.homedir
   alias = options.alias
@@ -45,18 +47,25 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
     } as OnLoadResult
   })
 
-  loggerCache = createResourceCache(fsStats, async (pathname: string, contents?: string) => {
+  loggerCache = createResourceCache(fsStats, async (pathname: string, contents: string | undefined, options: { logger: boolean }) => {
     contents ??= await readFile(pathname)
 
-    if (pathname.startsWith(process.cwd()) && !pathname.endsWith('.d.ts')) {
-      let prefix = ''
-      if (!contents.includes('log = logger')) {
-        prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
+    if (options.logger && !pathname.endsWith('.d.ts')) {
+      if ((logRegExp.test(contents)
+        || logCommentRegExp.test(contents))) {
+        const isActive = logActive.test(contents)
+        const isLocal = options.logger && pathname.startsWith(process.cwd())
+        const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
+        const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
+        let prefix = ''
+        if (isLocal && isActive && !contents.includes('log = logger')) {
+          prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
+        }
+        contents = `${prefix}${contents
+          .replace(logRegExp, replacer1)
+          .replace(logCommentRegExp, replacer2)
+          }`
       }
-      contents = `${prefix}${contents
-        .replace(/[^\.]log\((?<args>.+)\)/g, logExplicitReplaceString)
-        .replace(/\/\/!(?<op>[><:]) (?<text>.+)/g, logCommentReplaceString)
-        }`
     }
     // else if (!pathname.endsWith('.d.ts') && pathname.endsWith('.ts')) {
     //   contents = `var log=new Proxy(()=>{},{});${contents}`
@@ -134,9 +143,9 @@ export const hmr = {
 
 export const logger = {
   name: 'logger',
-  setup(build, { transform } = {} as any) {
+  setup(build, { transform, options } = {} as any) {
     const transformContents = async ({ args, contents }: { args: OnLoadArgs; contents: string }) => {
-      const item = await loggerCache.getOrUpdate(args.path, `${build.initialOptions.bundle}`, contents)
+      const item = await loggerCache.getOrUpdate(args.path, `${build.initialOptions.bundle}`, contents, options)
       return item.payload
     }
 
@@ -335,6 +344,7 @@ export const importResolve = {
 // ripped from: https://github.com/nativew/esbuild-plugin-pipe/blob/main/src/index.js
 interface PipeOptions extends OnLoadOptions {
   plugins: (Plugin & { setup(build: any, transform: any): Promise<any> })[]
+  logger: boolean
 }
 
 export const pipe = (options = {} as PipeOptions) => ({
@@ -349,7 +359,7 @@ export const pipe = (options = {} as PipeOptions) => ({
         (async (transform: any, plugin: any) => {
           const { contents } = await transform as any
 
-          return plugin.setup(build, { transform: { args, contents } })
+          return plugin.setup(build, { transform: { args, contents }, options })
         }) as any,
         { contents }
       ) as unknown as Promise<OnLoadResult>

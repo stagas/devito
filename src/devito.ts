@@ -41,6 +41,7 @@ export class DevitoOptions {
   @arg('--bundle', 'Serve bundled') bundle = true
   @arg('--d2', 'Enable D2') d2 = false
   @arg('--recorder', 'Embed DOM recorder.') recorder = false
+  @arg('--logger', 'Enable/disable logger.') logger = false
   @arg('--inlineSourceMaps', 'Inline sourcemaps') inlineSourceMaps = false
   @arg('--cache', 'Caching') cache = true
   @arg('--watch', 'Watch for changes') watch = true
