@@ -101,7 +101,6 @@
     "easy-https-server": "file:../easy-https-server",
     "esbuild": "0.19.4",
     "esbuild-plugin-alias": "0.2.1",
-    "esbuild_deno_loader": "file:../esbuild_deno_loader",
     "event-toolkit": "file:../event-toolkit",
     "everyday-node": "file:../everyday-node",
     "everyday-utils": "file:../everyday-utils",
