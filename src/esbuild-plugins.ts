@@ -61,6 +61,26 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
         if (isLocal && isActive && !contents.includes('log = logger')) {
           prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
         }
+
+        let i = -1, p1, p2, fnName: string
+        do {
+          i = contents.indexOf('@fx', i + 1)
+          if (i >= 0) {
+            p1 = i
+            p2 = contents.indexOf('(', i + 1)
+            if (p2 === -1) break
+            fnName = contents.slice(p1, p2)
+
+            console.log(fnName)
+
+            i = contents.indexOf(')', i + 1)
+            i = contents.indexOf('{', i + 1)
+            const toAdd = '//!: ' + fnName
+            contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
+            i += toAdd.length
+          }
+        } while (i >= 0)
+
         contents = `${prefix}${contents
           .replace(logRegExp, replacer1)
           .replace(logCommentRegExp, replacer2)
