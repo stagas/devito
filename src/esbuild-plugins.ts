@@ -29,7 +29,7 @@ function logDeco(s: string, contents: string) {
       p1 = i
       p2 = contents.indexOf('(', i + 1)
       if (p2 === -1) break
-      fnName = contents.slice(p1 + 1 + s.length, p2).trim()
+      fnName = contents.slice(p1 + 1, p2).trim()
 
       i = contents.indexOf(')', i + 1)
       i = contents.indexOf('{', i + 1)
