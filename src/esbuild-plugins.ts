@@ -30,7 +30,7 @@ function logDeco(s: string, contents: string) {
       p2 = contents.indexOf('(', i + 1)
       if (p2 === -1) break
       fnName = contents.slice(p1 + 1, p2).trim()
-
+      console.log(fnName)
       i = contents.indexOf(')', i + 1)
       i = contents.indexOf('\n  }', i + 1)
       const toAdd = ';log(' + JSON.stringify(fnName) + ');'
