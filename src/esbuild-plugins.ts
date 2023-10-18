@@ -26,7 +26,7 @@ function logDeco(s: string, contents: string) {
   do {
     i = contents.indexOf('@' + s, i + 1)
     if (i >= 0) {
-      const indentSize = i - contents.lastIndexOf('\n', i)
+      const indentSize = i - contents.lastIndexOf('\n', i - 1)
       console.log(indentSize)
       p1 = i
       p2 = contents.indexOf('(', i + 1)
