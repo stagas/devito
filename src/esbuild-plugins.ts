@@ -31,10 +31,7 @@ function logDeco(s: string, contents: string) {
       p2 = contents.indexOf('(', i + 1)
       if (p2 === -1) break
       fnName = contents.slice(p1 + 1, p2).trim()
-      console.log(fnName)
-      // i = contents.indexOf(')', i + 1)
       i = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
-      // console.log(i)
       const toAdd = ';log(' + JSON.stringify(fnName) + ');'
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
       i += toAdd.length + 1
