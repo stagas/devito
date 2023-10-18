@@ -71,8 +71,6 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
             if (p2 === -1) break
             fnName = contents.slice(p1 + 2, p2).trim()
 
-            console.log(fnName)
-
             i = contents.indexOf(')', i + 1)
             i = contents.indexOf('{', i + 1)
             const toAdd = '//!: ' + fnName
