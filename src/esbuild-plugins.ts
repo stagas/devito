@@ -33,19 +33,19 @@ function logDeco(s: string, contents: string) {
 
       fnName = contents.slice(p1 + 1, p2).trim()
 
-      if (s === 'fx') {
-        i = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
-        const toAdd = ';log(' + JSON.stringify(fnName) + ');'
-        contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
-        i += toAdd.length + 1
-      }
-      else {
+      // if (s === 'fx') {
+      //   i = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
+      //   const toAdd = ';log(' + JSON.stringify(fnName) + ');'
+      //   contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
+      //   i += toAdd.length + 1
+      // }
+      // else {
         i = contents.indexOf(')', i + 1)
         i = contents.indexOf('{', i + 1)
-        const toAdd = ';log(' + JSON.stringify(fnName) + ');'
+      const toAdd = ';console.groupCollapsed(' + JSON.stringify(fnName) + ');'
         contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
         i += toAdd.length
-      }
+      // }
     }
   } while (i >= 0)
   return contents
