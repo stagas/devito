@@ -33,7 +33,7 @@ function logDeco(s: string, contents: string) {
 
       i = contents.indexOf(')', i + 1)
       i = contents.indexOf('{', i + 1)
-      const toAdd = '//!: ' + fnName
+      const toAdd = '//!: ' + fnName + '\n'
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
       i += toAdd.length
     }
