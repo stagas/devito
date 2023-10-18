@@ -69,7 +69,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
             p1 = i
             p2 = contents.indexOf('(', i + 1)
             if (p2 === -1) break
-            fnName = contents.slice(p1, p2)
+            fnName = contents.slice(p1 + 2, p2).trim()
 
             console.log(fnName)
 
