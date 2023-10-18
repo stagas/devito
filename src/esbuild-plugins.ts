@@ -33,11 +33,11 @@ function logDeco(s: string, contents: string) {
       console.log(fnName)
       // i = contents.indexOf(')', i + 1)
       i = contents.indexOf('\n  }', i + 1)
-      console.log(i)
-      // const toAdd = ';log(' + JSON.stringify(fnName) + ');'
-      // contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
-      // i += toAdd.length + 1
-      console.log(i)
+      // console.log(i)
+      const toAdd = ';log(' + JSON.stringify(fnName) + ');'
+      contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
+      i += toAdd.length + 10
+      // console.log(i)
       // i = contents.indexOf(')', i + 1)
       // i = contents.indexOf('{', i + 1)
       // const toAdd = ';log(' + JSON.stringify(fnName) + ');'
