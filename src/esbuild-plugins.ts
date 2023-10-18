@@ -78,34 +78,39 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
   loggerCache = createResourceCache(fsStats, async (pathname: string, contents: string | undefined, options: { logger: boolean }) => {
     contents ??= await readFile(pathname)
 
-    if (options.logger && !pathname.endsWith('.d.ts')) {
-      const isActive = logActive.test(contents)
-      if (
-        logActive
-        || (logRegExp.test(contents)
-          || logCommentRegExp.test(contents))) {
-        // console.log(pathname)
-        const isLocal = true //options.logger && pathname.startsWith(process.cwd())
-        const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
-        const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
-        let prefix = ''
-        if (isLocal && isActive && !contents.includes('log = logger')) {
-          prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
+    if (!pathname.endsWith('.d.ts')) {
+      if (options.logger) {
+        const isActive = logActive.test(contents)
+        if (
+          logActive
+          || (logRegExp.test(contents)
+            || logCommentRegExp.test(contents))) {
+          // console.log(pathname)
+          const isLocal = true //options.logger && pathname.startsWith(process.cwd())
+          const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
+          const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
+          let prefix = ''
+          if (isLocal && isActive && !contents.includes('log = logger')) {
+            prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
+          }
+
+          contents = logDeco('fx', contents)
+          contents = logDeco('fn', contents)
+          contents = logDeco('init', contents)
+
+          contents = `${prefix}${contents
+            .replace(logRegExp, replacer1)
+            .replace(logCommentRegExp, replacer2)
+            }`
         }
-
-        contents = logDeco('fx', contents)
-        contents = logDeco('fn', contents)
-        contents = logDeco('init', contents)
-
-        contents = `${prefix}${contents
-          .replace(logRegExp, replacer1)
-          .replace(logCommentRegExp, replacer2)
-          }`
+      }
+      else {
+        contents = contents
+          .replace(logActive, '')
+          .replace(logRegExp, '')
+          .replace(logCommentRegExp, '')
       }
     }
-    // else if (!pathname.endsWith('.d.ts') && pathname.endsWith('.ts')) {
-    //   contents = `var log=new Proxy(()=>{},{});${contents}`
-    // }
 
     return {
       contents,
