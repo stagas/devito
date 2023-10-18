@@ -27,14 +27,13 @@ function logDeco(s: string, contents: string) {
     i = contents.indexOf('@' + s, i + 1)
     if (i >= 0) {
       const indentSize = i - contents.lastIndexOf('\n', i) - 1
-      console.log(indentSize)
       p1 = i
       p2 = contents.indexOf('(', i + 1)
       if (p2 === -1) break
       fnName = contents.slice(p1 + 1, p2).trim()
       console.log(fnName)
       // i = contents.indexOf(')', i + 1)
-      i = contents.indexOf('\n  }', i + 1)
+      i = contents.indexOf('\n' + ' '.repeat(indentSize) + '}', i + 1)
       // console.log(i)
       const toAdd = ';log(' + JSON.stringify(fnName) + ');'
       console.log(toAdd)
