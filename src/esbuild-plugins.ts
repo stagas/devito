@@ -86,7 +86,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
         || (logRegExp.test(contents)
           || logCommentRegExp.test(contents))) {
         // console.log(pathname)
-        const isLocal = options.logger && pathname.startsWith(process.cwd())
+        const isLocal = true //options.logger && pathname.startsWith(process.cwd())
         const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
         const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
         let prefix = ''
