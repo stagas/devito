@@ -21,6 +21,25 @@ export function logIt(kind: string, text: string) {
 `).replaceAll(/(\s{2,}|\n)/gm, ' ')
 }
 
+function logDeco(s: string, contents: string) {
+  let i = -1, p1, p2, fnName: string
+  do {
+    i = contents.indexOf('@' + s, i + 1)
+    if (i >= 0) {
+      p1 = i
+      p2 = contents.indexOf('(', i + 1)
+      if (p2 === -1) break
+      fnName = contents.slice(p1 + 1 + s.length, p2).trim()
+
+      i = contents.indexOf(')', i + 1)
+      i = contents.indexOf('{', i + 1)
+      const toAdd = '//!: ' + fnName
+      contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
+      i += toAdd.length
+    }
+  } while (i >= 0)
+  return contents
+}
 const logExplicitReplaceString = logIt('"info$<cmd>"', '$<args>')
 const logCommentReplaceString = logIt('"$<op>"', '"$<text>"')
 const logActive = /^log\.active/m
@@ -62,22 +81,9 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
           prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
         }
 
-        let i = -1, p1, p2, fnName: string
-        do {
-          i = contents.indexOf('@fx', i + 1)
-          if (i >= 0) {
-            p1 = i
-            p2 = contents.indexOf('(', i + 1)
-            if (p2 === -1) break
-            fnName = contents.slice(p1 + 3, p2).trim()
-
-            i = contents.indexOf(')', i + 1)
-            i = contents.indexOf('{', i + 1)
-            const toAdd = '//!: ' + fnName
-            contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
-            i += toAdd.length
-          }
-        } while (i >= 0)
+        contents = logDeco('fx', contents)
+        contents = logDeco('fn', contents)
+        contents = logDeco('init', contents)
 
         contents = `${prefix}${contents
           .replace(logRegExp, replacer1)
