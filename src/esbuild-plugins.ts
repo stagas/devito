@@ -70,9 +70,11 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
     contents ??= await readFile(pathname)
 
     if (options.logger && !pathname.endsWith('.d.ts')) {
-      if ((logRegExp.test(contents)
-        || logCommentRegExp.test(contents))) {
-        const isActive = logActive.test(contents)
+      const isActive = logActive.test(contents)
+      if (
+        logActive
+        || (logRegExp.test(contents)
+          || logCommentRegExp.test(contents))) {
         const isLocal = options.logger && pathname.startsWith(process.cwd())
         const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
         const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
