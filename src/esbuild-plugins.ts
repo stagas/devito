@@ -24,7 +24,7 @@ export function logIt(kind: string, text: string) {
 function logDeco(s: string, contents: string) {
   let i = -1, p1, p2, fnName: string
   do {
-    i = contents.indexOf('@' + s, i + 1)
+    i = contents.indexOf(s, i + 1)
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
       const indentSize = i - contents.lastIndexOf('\n', i)
       p1 = i
@@ -94,9 +94,10 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
             prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
           }
 
-          contents = logDeco('fx', contents)
-          contents = logDeco('fn', contents)
-          contents = logDeco('init', contents)
+          contents = logDeco('@fx', contents)
+          contents = logDeco('@fn', contents)
+          contents = logDeco('@init', contents)
+          contents = logDeco('get', contents)
 
           contents = `${prefix}${contents
             .replace(logRegExp, replacer1)
