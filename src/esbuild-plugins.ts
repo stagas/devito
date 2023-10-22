@@ -40,7 +40,7 @@ function logDeco(s: string, contents: string) {
 
       i = contents.indexOf(')', i+1)
       i = contents.indexOf('{', i+1)
-
+      console.log(fnName)
       const toAdd = ';log(' + JSON.stringify(`${cs} ${fnName}`) + ');'
       // if (s === 'get ') console.log(fnName, s, contents.slice(i + 1))
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
