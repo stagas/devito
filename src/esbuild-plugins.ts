@@ -49,7 +49,7 @@ function logDeco(s: string, contents: string) {
       i += toAdd.length + 1
 
       if (s === '@fx') {
-        console.log(contents.slice(i))
+        console.log(indentSize)
         const res2 = contents.indexOf('\n' + '}'.padStart(indentSize), i)
         if (res2 >= 0) {
           console.log('YES')
