@@ -26,6 +26,7 @@ function logDeco(s: string, contents: string) {
   const regexp = new RegExp(`^\\s+${s}`, 'g')
   do {
     regexp.lastIndex = i + 1
+    console.log(regexp.exec(contents))
     i = regexp.exec(contents)?.index ?? -1
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
       const indentSize = i - contents.lastIndexOf('\n', i)
