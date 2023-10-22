@@ -23,7 +23,7 @@ export function logIt(kind: string, text: string) {
 
 function logDeco(s: string, contents: string) {
   let i = -1, p1, p2, fnName: string
-  const regexp = new RegExp(`^\s+${s}`, 'g')
+  const regexp = new RegExp(`^\\s+${s}`, 'g')
   do {
     regexp.lastIndex = i + 1
     i = regexp.exec(contents)?.index ?? -1
