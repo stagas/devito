@@ -29,6 +29,7 @@ function logDeco(s: string, contents: string) {
     regexp.lastIndex = i
     console.log(i)
     const res = regexp.exec(contents)
+    console.log(res[0])
     i = res?.index ?? -1
     if (i >= 0) i += res![0]!.length
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
