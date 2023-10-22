@@ -23,13 +23,13 @@ export function logIt(kind: string, text: string) {
 
 function logDeco(s: string, contents: string) {
   let i = -1, p1, p2, fnName: string
-  const length = s.length
+  const length = s.trim().length
   const regexp = new RegExp(`^\\s+${s}`, 'gm')
   do {
     regexp.lastIndex = i
     const res = regexp.exec(contents)
     i = res?.index ?? -1
-    if (i >= 0) i += res![0]!.length.trim() - length
+    if (i >= 0) i += res![0]!.length - length
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
       const indentSize = i - contents.lastIndexOf('\n', i)
       p1 = i
