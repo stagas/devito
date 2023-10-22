@@ -26,10 +26,10 @@ function logDeco(s: string, contents: string) {
   const cs = s.replace(/[^a-z0-9_]+/gi, '')
   const regexp = new RegExp(`^\\s+${s}`, 'gm')
   do {
-    regexp.lastIndex = i + 1
+    regexp.lastIndex = i
     const res = regexp.exec(contents)
     i = res?.index ?? -1
-    if (i >= 0) i += res![0]!.length - s.length + 2
+    if (i >= 0) i += res![0]!.length - cs.length
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
       const indentSize = i - contents.lastIndexOf('\n', i + 1)
       p1 = i
