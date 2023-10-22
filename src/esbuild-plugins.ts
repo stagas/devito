@@ -109,6 +109,12 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
             .replace(logCommentRegExp, replacer2)
             }`
         }
+        else {
+          contents = contents
+            .replace(logActiveRegExp, '')
+            .replace(logRegExp, '')
+            .replace(logCommentRegExp, '')
+        }
       }
       else {
         contents = contents
