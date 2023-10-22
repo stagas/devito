@@ -26,7 +26,7 @@ function logDeco(s: string, contents: string) {
   const cs = s.replace(/[^a-z0-9_]+/gi, '')
   const regexp = new RegExp(`^\\s+${s}`, 'gm')
   do {
-    regexp.lastIndex = i
+    regexp.lastIndex = i + 1
     const res = regexp.exec(contents)
     i = res?.index ?? -1
     if (i >= 0) i += res![0]!.length - s.length + 2
