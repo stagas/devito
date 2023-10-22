@@ -86,34 +86,27 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
     contents ??= await readFile(pathname)
 
     if (!pathname.endsWith('.d.ts')) {
-      if (options.logger) {
-        const isActive = logActiveRegExp.test(contents)
-        if (isActive) {
-          console.log(pathname)
-          const isLocal = true //options.logger && pathname.startsWith(process.cwd())
-          const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
-          const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
-          let prefix = ''
-          if (isLocal && isActive && !contents.includes('log = logger')) {
-            prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
-          }
+      let isActive: boolean
+      if (options.logger && (isActive = logActiveRegExp.test(contents))) {
 
-          contents = logDeco('@fx ', contents)
-          contents = logDeco('@fn ', contents)
-          contents = logDeco('@init ', contents)
-          contents = logDeco('get ', contents)
+        console.log(pathname)
+        const isLocal = true //options.logger && pathname.startsWith(process.cwd())
+        const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
+        const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
+        let prefix = ''
+        if (isLocal && isActive && !contents.includes('log = logger')) {
+          prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
+        }
 
-          contents = `${prefix}${contents
-            .replace(logRegExp, replacer1)
-            .replace(logCommentRegExp, replacer2)
-            }`
-        }
-        else {
-          contents = contents
-            .replace(logActiveRegExp, '')
-            .replace(logRegExp, '')
-            .replace(logCommentRegExp, '')
-        }
+        contents = logDeco('@fx ', contents)
+        contents = logDeco('@fn ', contents)
+        contents = logDeco('@init ', contents)
+        contents = logDeco('get ', contents)
+
+        contents = `${prefix}${contents
+          .replace(logRegExp, replacer1)
+          .replace(logCommentRegExp, replacer2)
+          }`
       }
       else {
         contents = contents
