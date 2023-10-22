@@ -41,8 +41,8 @@ function logDeco(s: string, contents: string) {
 
       if (s !== 'get ') {
         i = contents.indexOf(')', i)
+        i = contents.indexOf('{', i)
       }
-      i = contents.indexOf('{', i)
       const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ');'
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
       // i += toAdd.length
