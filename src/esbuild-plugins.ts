@@ -31,7 +31,7 @@ function logDeco(s: string, contents: string) {
     i = res?.index ?? -1
     if (i >= 0) i += res![0]!.length - cs.length - 2
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
-      const indentSize = i - contents.lastIndexOf('\n', i)
+      const indentSizePlus1 = i - contents.lastIndexOf('\n', i)
       p1 = i
       p2 = contents.indexOf('(', i + 1)
       if (p2 === -1) break
@@ -42,13 +42,11 @@ function logDeco(s: string, contents: string) {
       i = contents.indexOf('{', i + 1)
       const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ');'
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
-      i += toAdd.length
+      i += toAdd.length + 1
       if (s === '@fx ') {
-        const res2 = contents.indexOf('\n' + '}'.padStart(indentSize), i)
-        console.log('YO', res2, indentSize)
+        const res2 = contents.indexOf('\n' + '}'.padStart(indentSizePlus1), i)
         if (res2 >= 0) {
           i = res2
-          console.log('YES')
           const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ',"(end)");'
           contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
           i += toAdd.length + 1
