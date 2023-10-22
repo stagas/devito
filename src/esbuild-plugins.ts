@@ -52,8 +52,8 @@ function logDeco(s: string, contents: string) {
 
       if (s === '@fx') {
         const res2 = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
-        if (res >= 0) {
-          i = res
+        if (res2 >= 0) {
+          i = res2
           console.log(res2)
           console.log(fnName, i)
           const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ',"(end)");'
