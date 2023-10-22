@@ -27,7 +27,7 @@ function logDeco(s: string, contents: string) {
   const regexp = new RegExp(`^\\s+${s}`, 'gm')
   // console.log(regexp)
   do {
-    regexp.lastIndex = i + 1
+    regexp.lastIndex = i
     console.log(regexp.exec(contents))
     const res = regexp.exec(contents)
     i = res?.index ?? -1
