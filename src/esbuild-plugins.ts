@@ -62,7 +62,7 @@ function logDeco(s: string, contents: string) {
 }
 const logExplicitReplaceString = logIt('"info$<cmd>"', '$<args>')
 const logCommentReplaceString = logIt('"$<op>"', '"$<text>"')
-const logActive = /^log\.active/gm
+const logActiveRegExp = /^log\.active/gm
 const logRegExp = /[^\.]log(?<cmd>\.pretty)?\((?<args>.+)\)/g
 const logCommentRegExp = /\/\/!(?<op>[><:]) (?<text>.+)/g
 export function createEsbuildPluginCaches(options: { homedir: string; alias?: Record<string, string> }) {
@@ -91,7 +91,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
 
     if (!pathname.endsWith('.d.ts')) {
       if (options.logger) {
-        const isActive = logActive.test(contents)
+        const isActive = logActiveRegExp.test(contents)
         if (isActive) {
           console.log(pathname)
           const isLocal = true //options.logger && pathname.startsWith(process.cwd())
@@ -105,7 +105,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
           contents = logDeco('@fx', contents)
           contents = logDeco('@fn', contents)
           contents = logDeco('@init', contents)
-          // contents = logDeco('get ', contents)
+          contents = logDeco('get ', contents)
 
           contents = `${prefix}${contents
             .replace(logRegExp, replacer1)
@@ -115,7 +115,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
       }
       else {
         contents = contents
-          .replace(logActive, '')
+          .replace(logActiveRegExp, '')
           .replace(logRegExp, '')
           .replace(logCommentRegExp, '')
       }
