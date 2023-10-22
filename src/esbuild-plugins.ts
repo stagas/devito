@@ -31,7 +31,7 @@ function logDeco(s: string, contents: string) {
     i = res?.index ?? -1
     if (i >= 0) i += res![0]!.length - cs.length - 2
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
-      const indentSize = i + 3 - contents.lastIndexOf('\n', i)
+      const indentSize = i + 1 - contents.lastIndexOf('\n', i)
       p1 = i
       p2 = contents.indexOf('(', i + 1)
       if (p2 === -1) break
