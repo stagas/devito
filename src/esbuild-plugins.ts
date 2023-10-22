@@ -44,8 +44,8 @@ function logDeco(s: string, contents: string) {
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
       i += toAdd.length
       if (s === '@fx ') {
-        console.log('YO')
         const res2 = contents.indexOf('\n' + '}'.padStart(indentSize), i)
+        console.log('YO', res2)
         if (res2 >= 0) {
           i = res2
           console.log('YES')
