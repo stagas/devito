@@ -48,14 +48,18 @@ function logDeco(s: string, contents: string) {
       const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ');'
       // if (s === 'get ') console.log(fnName, s, contents.slice(i + 1))
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
-      i += toAdd.length
+      i += toAdd.length + 1
 
       if (s === '@fx') {
-        i = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
-        console.log(fnName, i)
-        const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ',"(end)");'
-        contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
-        i += toAdd.length + 1
+        const res2 = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
+        if (res >= 0) {
+          i = res
+          console.log(res2)
+          console.log(fnName, i)
+          const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ',"(end)");'
+          contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
+          i += toAdd.length + 1
+        }
       }
     }
   } while (i >= 0)
