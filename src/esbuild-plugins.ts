@@ -102,7 +102,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
           contents = logDeco('@fx', contents)
           contents = logDeco('@fn', contents)
           contents = logDeco('@init', contents)
-          // contents = logDeco('get', contents)
+          contents = logDeco('get ', contents)
 
           contents = `${prefix}${contents
             .replace(logRegExp, replacer1)
