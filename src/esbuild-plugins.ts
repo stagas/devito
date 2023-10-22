@@ -23,6 +23,7 @@ export function logIt(kind: string, text: string) {
 
 function logDeco(s: string, contents: string) {
   let i = -1, p1, p2, fnName: string
+  const cs = s.replace(/[^a-z0-9_]/gi, '')
   const regexp = new RegExp(`^\\s+${s}`, 'gm')
   do {
     regexp.lastIndex = i
@@ -39,15 +40,15 @@ function logDeco(s: string, contents: string) {
 
       i = contents.indexOf(')', i+1)
       i = contents.indexOf('{', i+1)
-      console.log(fnName)
-      const toAdd = ';log(' + JSON.stringify(`${s} ${fnName}`) + ');'
+
+      const toAdd = ';log(' + JSON.stringify(`${cs} ${fnName}`) + ');'
       // if (s === 'get ') console.log(fnName, s, contents.slice(i + 1))
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
       i += toAdd.length
 
       if (s === '@fx') {
         i = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
-        const toAdd = ';log(' + JSON.stringify(`${s} ${fnName}`) + ',"(end)");'
+        const toAdd = ';log(' + JSON.stringify(`${cs} ${fnName}`) + ',"(end)");'
         contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
         i += toAdd.length + 1
       }
