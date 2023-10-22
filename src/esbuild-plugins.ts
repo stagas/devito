@@ -62,7 +62,7 @@ function logDeco(s: string, contents: string) {
 }
 const logExplicitReplaceString = logIt('"info$<cmd>"', '$<args>')
 const logCommentReplaceString = logIt('"$<op>"', '"$<text>"')
-const logActive = /^log\.active/m
+const logActive = /^log\.active/gm
 const logRegExp = /[^\.]log(?<cmd>\.pretty)?\((?<args>.+)\)/g
 const logCommentRegExp = /\/\/!(?<op>[><:]) (?<text>.+)/g
 export function createEsbuildPluginCaches(options: { homedir: string; alias?: Record<string, string> }) {
