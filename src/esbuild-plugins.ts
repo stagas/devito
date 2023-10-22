@@ -38,8 +38,8 @@ function logDeco(s: string, contents: string) {
 
       fnName = contents.slice(p1 + 1, p2).trim()
 
-      i = contents.indexOf(')', i + 1)
-      i = contents.indexOf('{', i + 1)
+      i = contents.indexOf(')', i)
+      i = contents.indexOf('{', i)
 
       const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ');'
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
@@ -106,7 +106,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
           contents = logDeco('@fx', contents)
           contents = logDeco('@fn', contents)
           contents = logDeco('@init', contents)
-          contents = logDeco('get ', contents)
+          // contents = logDeco('get ', contents)
 
           contents = `${prefix}${contents
             .replace(logRegExp, replacer1)
