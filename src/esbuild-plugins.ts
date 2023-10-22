@@ -29,7 +29,7 @@ function logDeco(s: string, contents: string) {
     regexp.lastIndex = i
     const res = regexp.exec(contents)
     i = res?.index ?? -1
-    if (i >= 0) i += res![0]!.length - cs.length + 1
+    if (i >= 0) i += res![0]!.length - cs.length + 2
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
       const indentSize = i - contents.lastIndexOf('\n', i + 1)
       p1 = i
