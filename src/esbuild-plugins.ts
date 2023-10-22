@@ -28,8 +28,8 @@ function logDeco(s: string, contents: string) {
   // console.log(regexp)
   do {
     regexp.lastIndex = i + 1
-    console.log(regexp.exec(contents))
     const res = regexp.exec(contents)
+    console.log('MATCH', res)
     i = res?.index ?? -1
     if (i >= 0) i += res!.length - length + 1
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
