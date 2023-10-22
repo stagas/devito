@@ -93,7 +93,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
       if (options.logger) {
         const isActive = logActive.test(contents)
         if (logActive) {
-          // console.log(pathname)
+          console.log(pathname)
           const isLocal = true //options.logger && pathname.startsWith(process.cwd())
           const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
           const replacer2 = isLocal && isActive ? logCommentReplaceString : ''
