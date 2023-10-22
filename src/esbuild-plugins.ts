@@ -25,10 +25,10 @@ function logDeco(s: string, contents: string) {
   let i = -1, p1, p2, fnName: string
   const length = s.length
   const regexp = new RegExp(`^\\s+${s}`, 'm')
-  console.log(regexp)
+  // console.log(regexp)
   do {
     regexp.lastIndex = i + 1
-    console.log(regexp.exec(contents))
+    // console.log(regexp.exec(contents))
     const res = regexp.exec(contents)
     i = res?.index ?? -1
     if (i >= 0) i += res!.length + 1
