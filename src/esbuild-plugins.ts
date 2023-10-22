@@ -27,15 +27,14 @@ function logDeco(s: string, contents: string) {
   const regexp = new RegExp(`^\\s+${s}`, 'gm')
   do {
     regexp.lastIndex = i
-    console.log(i)
+    // console.log(i)
     const res = regexp.exec(contents)
-    console.log(res?.[0])
+    // console.log(res?.[0])
     i = res?.index ?? -1
-    console.log(i)
+    // console.log(i)
     if (i >= 0) i += res![0]!.length
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
       const indentSize = i - contents.lastIndexOf('\n', i)
-      console.log('INDENT', indentSize)
       p1 = i
       p2 = contents.indexOf('(', i + 1)
       if (p2 === -1) break
@@ -52,9 +51,8 @@ function logDeco(s: string, contents: string) {
       if (s === '@fx') {
         const res2 = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
         if (res2 >= 0) {
+          console.log('YES')
           i = res2
-          console.log(res2)
-          console.log(fnName, i)
           const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ',"(end)");'
           contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 3)
           i += toAdd.length + 1
