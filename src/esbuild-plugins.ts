@@ -29,7 +29,7 @@ function logDeco(s: string, contents: string) {
     regexp.lastIndex = i
     const res = regexp.exec(contents)
     i = res?.index ?? -1
-    if (i >= 0) i += res![0]!.length
+    if (i >= 0) i += res![0]!.length - cs.length
     if (i >= 0 && contents.lastIndexOf('//', i) <= contents.lastIndexOf('\n', i)) {
       const indentSize = i - contents.lastIndexOf('\n', i)
       p1 = i
@@ -44,7 +44,7 @@ function logDeco(s: string, contents: string) {
       const toAdd = ';log(' + JSON.stringify(`${fnName}`) + ');'
       // if (s === 'get ') console.log(fnName, s, contents.slice(i + 1))
       contents = contents.slice(0, i + 1) + toAdd + contents.slice(i + 1)
-      i += toAdd.length + 1
+      i += toAdd.length
 
       if (s === '@fx') {
         i = contents.indexOf('\n' + '}'.padStart(indentSize), i + 1)
