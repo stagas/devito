@@ -99,9 +99,9 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
             prefix = `import { logger } from 'utils';const log = logger(import.meta.url);`
           }
 
-          contents = logDeco('@fx', contents)
-          contents = logDeco('@fn', contents)
-          contents = logDeco('@init', contents)
+          contents = logDeco('@fx ', contents)
+          contents = logDeco('@fn ', contents)
+          contents = logDeco('@init ', contents)
           contents = logDeco('get ', contents)
 
           contents = `${prefix}${contents
