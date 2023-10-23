@@ -87,6 +87,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
 
     if (!pathname.endsWith('.d.ts')) {
       let isActive: boolean
+      logActiveRegExp.lastIndex = -1
       if (options.logger && (isActive = logActiveRegExp.test(contents))) {
         const isLocal = true //options.logger && pathname.startsWith(process.cwd())
         const replacer1 = isLocal && isActive ? logExplicitReplaceString : ''
