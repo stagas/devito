@@ -1,6 +1,6 @@
 import { fsStats } from 'easy-https-server'
 import { BuildOptions } from 'esbuild'
-import { Deferred, KeyedCache } from 'everyday-utils'
+import { Deferred, KeyedCache } from 'utils'
 import * as fs from 'fs'
 import { hmrCache, importMetaCache } from './esbuild-plugins'
 import { esbuildCache } from './request-handler'

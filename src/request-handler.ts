@@ -1,17 +1,14 @@
 import chalk from '@stagas/chalk'
-import { eachDep, EachDepOptions } from 'each-dep'
+import { applySourceMaps } from 'apply-sourcemaps'
 import { contentType, etag, fsStats, HttpContext, print, serveStatic, startTask } from 'easy-https-server'
 import { build } from 'esbuild'
 import alias from 'esbuild-plugin-alias'
-import { discoverFileWithSuffixes, exists } from 'everyday-node'
 import * as fs from 'fs'
 import { OutgoingHttpHeaders } from 'http'
+import { discoverFileWithSuffixes, eachDep, EachDepOptions, exists } from 'node-utils'
 import openInEditor from 'open-in-editor'
-import { applySourceMaps } from 'apply-sourcemaps'
-import { serveD2, sseD2 } from './d2'
 import * as os from 'os'
 import * as path from 'path'
-import civetPlugin from '@danielx/civet/esbuild-plugin'
 
 import {
   clearDevitoCaches,
@@ -20,15 +17,13 @@ import {
   forgetFile,
   FS_PREFIX,
   isWorker,
-  // link,
   ResourceCache,
-} from './core'
-import { DevitoOptions } from './devito'
-import { Esbuild, watchMetafile } from './esbuild'
-import { css, hmr, importMetaUrl, importResolve, logger, pipe } from './esbuild-plugins'
-import { mainHtml } from './main-html'
-import { SSE } from './sse'
-import { d2Plugin } from './d2-plugin'
+} from './core.ts'
+import { DevitoOptions } from './devito.ts'
+import { css, hmr, importMetaUrl, importResolve, logger, pipe } from './esbuild-plugins.ts'
+import { Esbuild, watchMetafile } from './esbuild.ts'
+import { mainHtml } from './main-html.ts'
+import { SSE } from './sse.ts'
 
 const suffixes = [
   '.ts',
@@ -116,8 +111,8 @@ export async function requestHandler(
   esbuildCache = createResourceCache(
     fsStats,
     async (pathname: string) => {
-      let tsconfig: string | undefined = path.join(options.rootPath, 'tsconfig.json')
-      if (!(await exists(tsconfig))) tsconfig = void 0
+      let tsconfig: string = path.join(options.rootPath, 'tsconfig.json')
+      if (!(await exists(tsconfig))) tsconfig = ''
 
       // if (busy.has(pathname)) {
       //   throw new Error('Busy')
@@ -140,7 +135,6 @@ export async function requestHandler(
       plugins.push(logger)
       if (!bundle) plugins.push(importResolve)
       if (options.hmr) plugins.push(hmr)
-      if (options.d2) plugins.push(d2Plugin)
       if (format !== 'esm' || bundle) plugins.push(importMetaUrl)
 
       if (isWorker(pathname)) clearDevitoCaches()
@@ -152,11 +146,10 @@ export async function requestHandler(
         bundle,
         entryPoints: [pathname],
         sourceRoot: `/${FS_PREFIX}`,
-        sourcemap: options.disableSourceMaps ? false : esbuildCommonOptions.sourcemap,
+        sourcemap: options.disableSourceMaps ? false : esbuildCommonOptions.sourcemap!,
         absWorkingDir: options.homedir,
         tsconfig,
         plugins: [
-          civetPlugin(),
           plugins.length > 1
             ? pipe({
               filter: /\.m?[jt]sx?$/,
@@ -511,13 +504,10 @@ export async function requestHandler(
     }
 
     //
-    // GET /d2
+    // GET /devito.js
     //
-
-    if (pathname.startsWith('/d2')) {
-      sseD2(req, res)
-      return
-    }
+    // Runtime.
+    //
 
     if (pathname === '/devito.js') {
       const cacheControl = caches.get('/devito.js')!
@@ -776,15 +766,10 @@ export async function requestHandler(
     //
 
     if (await exists(pathname)) {
-      if (pathname.endsWith('.d2')) {
-        serveD2(req, res, pathname)
-      }
-      else {
-        await serveStatic(req, res, pathname, {
-          cache: cache('public, max-age=720'),
-          outgoingHeaders: commonHeaders,
-        })
-      }
+      await serveStatic(req, res, pathname, {
+        cache: cache('public, max-age=720'),
+        outgoingHeaders: commonHeaders,
+      })
     }
     else {
       if (options.spa) {
@@ -799,8 +784,14 @@ export async function requestHandler(
 
   // start responding to requests
 
+  let id = 0
   for await (const { req, res } of request) {
     print(req.method, chalk.white(req.url))
+    id++
+    // @ts-ignore
+    if (!req.socket) req.socket = { id }
+    // @ts-ignore
+    if (!res.socket) res.socket = { id }
     respond(req, res)
   }
 }

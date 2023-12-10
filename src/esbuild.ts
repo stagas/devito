@@ -1,13 +1,10 @@
 import { BuildContext, BuildResult, Metafile, context } from 'esbuild'
 import alias from 'esbuild-plugin-alias'
-import { queue } from 'event-toolkit'
-import { Deferred } from 'everyday-utils'
 import * as fs from 'fs'
 import * as path from 'path'
-import { FS_PREFIX, esbuildCommonOptions, readFile } from './core'
-import { d2Plugin } from './d2-plugin'
-import { hmr, importMetaUrl, importResolve, logger, markdown, pipe } from './esbuild-plugins'
-import civetPlugin from '@danielx/civet/esbuild-plugin'
+import { Deferred, debounce } from 'utils'
+import { FS_PREFIX, esbuildCommonOptions, readFile } from './core.ts'
+import { hmr, importMetaUrl, importResolve, logger, markdown, pipe } from './esbuild-plugins.ts'
 
 export interface EsbuildOptions {
   entryFile: string
@@ -36,7 +33,7 @@ export function watchMetafile(
   metafile: Metafile,
   cb: (changed: Set<string>) => void,
 ) {
-  const debounced = queue.debounce(200).not.first.not.next.last(cb)
+  const debounced = debounce(200, cb)
   const changed = new Set<string>()
 
   function collect(pathname: string) {
@@ -61,7 +58,9 @@ export function watchMetafile(
     watchers.push(
       fs.watch(
         dirname,
-        (_, filename) => onchange(dirname, filename)
+        (_, filename) => {
+          if (filename) onchange(dirname, filename)
+        }
       )
     )
   }
@@ -116,7 +115,6 @@ export class Esbuild {
       plugins.push(logger)
       if (!this.options.bundle) plugins.push(importResolve)
       if (this.options.hmr) plugins.push(hmr)
-      if (this.options.d2) plugins.push(d2Plugin)
       if (!this.options.esm || this.options.bundle) plugins.push(importMetaUrl)
 
       this.ctx = await context({
@@ -129,7 +127,6 @@ export class Esbuild {
         sourcemap: this.options.disableSourceMaps ? false : this.options.inlineSourceMaps ? 'inline' : 'linked',
         absWorkingDir: this.options.homedir,
         plugins: [
-          civetPlugin(),
           plugins.length > 1
             ? pipe({
               filter: /\.m?[jt]sx?$/,
@@ -194,7 +191,7 @@ export class Esbuild {
     this.deferred.resolve()
   }
 
-  rebuild: () => Promise<void> = queue.debounce(200).not.first.not.next.last(function (this: Esbuild) {
+  rebuild: () => Promise<void> = debounce(200, async () => {
     if (this.options.entrySource) {
       const deferred = Deferred<string>()
       const accessTime = performance.now()

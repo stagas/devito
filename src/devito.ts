@@ -7,22 +7,20 @@ import {
   print,
   printAddress,
   readCert,
-  ServerOptions,
 } from 'easy-https-server'
-import { discoverFileWithSuffixes } from 'everyday-node'
+import type { ServerOptions } from 'easy-https-server'
 import * as fs from 'fs'
+import { discoverFileWithSuffixes } from 'node-utils'
 import * as os from 'os'
 import * as path from 'path'
 
-import { createEsbuild, Esbuild } from './esbuild'
-import { createEsbuildPluginCaches } from './esbuild-plugins'
-import { requestHandler } from './request-handler'
-import { SSE } from './sse'
-import { build } from 'esbuild'
-// import { setPrinterCode } from './d2-plugin'
+import { createEsbuildPluginCaches } from './esbuild-plugins.ts'
+import { createEsbuild, Esbuild } from './esbuild.ts'
+import { requestHandler } from './request-handler.ts'
+import { SSE } from './sse.ts'
 
 export class DevitoOptions {
-  @arg('<file>', 'Entry point file.') file!: string
+  @arg('<file>', 'Entry point file.') file: string = ''
   @arg('--root', 'Root directory') root = '.'
   @arg('--host', 'Hostname') hostname = 'devito.test'
   @arg('--port', 'Starting port') startPort = 3000
@@ -39,7 +37,6 @@ export class DevitoOptions {
   @arg('--homedir', 'Home dir, common ancestor of all dependencies') homedir = '~'
   @arg('--editor', 'Editor to open files in') editor = 'code'
   @arg('--bundle', 'Serve bundled') bundle = true
-  @arg('--d2', 'Enable D2') d2 = false
   @arg('--recorder', 'Embed DOM recorder.') recorder = false
   @arg('--logger', 'Enable/disable logger.') logger = false
   @arg('--inlineSourceMaps', 'Inline sourcemaps') inlineSourceMaps = false
@@ -72,6 +69,7 @@ export class DevitoOptions {
 
 export async function devito(partialOptions: Partial<DevitoOptions>) {
   const options = new DevitoOptions(partialOptions)
+
   if (options.homedir === '~') options.homedir = os.homedir()
   if (typeof options.cert === 'string' && options.cert.startsWith('~'))
     options.cert = options.cert.replace('~', os.homedir())
@@ -84,29 +82,9 @@ export async function devito(partialOptions: Partial<DevitoOptions>) {
 
   Object.assign(logOptions, options)
 
-  // const printer = await build({
-  //   entryPoints: [
-  //     require.resolve('utils')
-  //       .split('/')
-  //       .slice(0, -1)
-  //       .join('/')
-  //     + '/printer.ts'
-  //   ],
-  //   format: 'iife',
-  //   target: 'es2022',
-  //   write: false,
-  //   bundle: true,
-  //   globalName: 'printer',
-  //   minify: true,
-  // })
-
-  // const printerCode = printer.outputFiles![0].text + ';print=printer.printer("Entry");'
-
-  // setPrinterCode(printerCode)
-
   createEsbuildPluginCaches(options)
   let esbuild: Esbuild | undefined
-  if (!options.file.endsWith('.html') && !options.file.endsWith('.d2')) {
+  if (!options.file?.endsWith('.html')) {
     esbuild = await createEsbuild(options)
   }
 

@@ -217,6 +217,7 @@ export const markdown = {
   name: 'markdown',
   setup(build) {
     build.onLoad({ filter: /.md$/ }, async args => {
+      // @ts-ignore
       const MarkdownIt = (await import('markdown-it')).default
 
       const md = await fs.promises.readFile(args.path, 'utf-8')
