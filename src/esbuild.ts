@@ -17,6 +17,7 @@ export interface EsbuildOptions {
   bundle: boolean
   alias?: Record<string, string>
   inlineSourceMaps?: boolean
+  disableSourceMaps?: boolean
   hmr?: boolean
   d2?: boolean
   esm?: boolean
@@ -125,7 +126,7 @@ export class Esbuild {
         // incremental: this.options.entrySource ? false : true,
         sourceRoot: `/${FS_PREFIX}`,
         outfile: path.join(this.options.homedir, 'bundle.js'),
-        sourcemap: this.options.inlineSourceMaps ? 'inline' : 'linked',
+        sourcemap: this.options.disableSourceMaps ? false : this.options.inlineSourceMaps ? 'inline' : 'linked',
         absWorkingDir: this.options.homedir,
         plugins: [
           civetPlugin(),

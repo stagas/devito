@@ -94,16 +94,16 @@
     "@danielx/civet": "*",
     "@esbuild/linux-x64": "*",
     "@stagas/chalk": "^5.0.1",
-    "apply-sourcemaps": "file:../apply-sourcemaps",
-    "decarg": "file:../decarg",
-    "dom-recorder": "file:../dom-recorder",
-    "each-dep": "file:../each-dep",
-    "easy-https-server": "file:../easy-https-server",
+    "apply-sourcemaps": "github:stagas/apply-sourcemaps",
+    "decarg": "github:stagas/decarg",
+    "dom-recorder": "github:stagas/dom-recorder",
+    "each-dep": "github:stagas/each-dep",
+    "easy-https-server": "github:stagas/easy-https-server",
     "esbuild": "0.19.4",
     "esbuild-plugin-alias": "0.2.1",
-    "event-toolkit": "file:../event-toolkit",
-    "everyday-node": "file:../everyday-node",
-    "everyday-utils": "file:../everyday-utils",
+    "event-toolkit": "github:stagas/event-toolkit",
+    "everyday-node": "github:stagas/everyday-node",
+    "everyday-utils": "github:stagas/everyday-utils",
     "github-markdown-css": "5.1.0",
     "import-meta-resolve": "2.0.3",
     "make-cert": "1.2.1",
@@ -112,6 +112,6 @@
     "open-in-editor": "2.2.0",
     "qrcode-terminal": "0.12.0",
     "source-map-support": "0.5.21",
-    "utils": "file:../utils"
+    "utils": "github:stagas/utils"
   }
 }

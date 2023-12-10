@@ -20,6 +20,8 @@ export const esbuildCommonOptions: BuildOptions = {
   legalComments: 'inline',
   sourcemap: 'inline',
   minifyWhitespace: false,
+  minifySyntax: false,
+  minifyIdentifiers: false,
   // minifySyntax: true,
   loader: {
     '.mjs': 'js',

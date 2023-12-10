@@ -43,6 +43,7 @@ export class DevitoOptions {
   @arg('--recorder', 'Embed DOM recorder.') recorder = false
   @arg('--logger', 'Enable/disable logger.') logger = false
   @arg('--inlineSourceMaps', 'Inline sourcemaps') inlineSourceMaps = false
+  @arg('--disableSourceMaps', 'Disable sourcemaps') disableSourceMaps = false
   @arg('--cache', 'Caching') cache = true
   @arg('--watch', 'Watch for changes') watch = true
   @arg('--quiet', 'Silence output') quiet = false

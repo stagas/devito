@@ -108,7 +108,7 @@ export function createEsbuildPluginCaches(options: { homedir: string; alias?: Re
           }`
       }
       else {
-        contents = contents
+        contents = 'globalThis.log=()=>{};' + contents
           .replace(logActiveRegExp, '')
           .replace(logRegExp, '')
           .replace(logCommentRegExp, '')

@@ -152,6 +152,7 @@ export async function requestHandler(
         bundle,
         entryPoints: [pathname],
         sourceRoot: `/${FS_PREFIX}`,
+        sourcemap: options.disableSourceMaps ? false : esbuildCommonOptions.sourcemap,
         absWorkingDir: options.homedir,
         tsconfig,
         plugins: [
@@ -708,7 +709,7 @@ export async function requestHandler(
     //
 
     const isHome = req.url.startsWith(`/${FS_PREFIX}/`)
-    const isSourceCode = /(\.m?[jt]sx?|\.json)$/.test(pathname)
+    const isSourceCode = /(\.m?[jt]sx?)$/.test(pathname) // |\.json
     const isJsxImportSource = /jsx-runtime$/.test(pathname)
 
     pathname = isHome ? pathname.slice(FS_PREFIX.length + 1) : pathname
