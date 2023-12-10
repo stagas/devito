@@ -5,6 +5,7 @@ import * as path from 'path'
 import { Deferred, debounce } from 'utils'
 import { FS_PREFIX, esbuildCommonOptions, readFile } from './core.ts'
 import { hmr, importMetaUrl, importResolve, logger, markdown, pipe } from './esbuild-plugins.ts'
+import { exists } from 'node-utils'
 
 export interface EsbuildOptions {
   entryFile: string
@@ -110,6 +111,9 @@ export class Esbuild {
     }
 
     try {
+      let tsconfig: string = path.join(this.options.rootPath, 'tsconfig.json')
+      if (!(await exists(tsconfig))) tsconfig = ''
+
       const plugins = [] as any
 
       plugins.push(logger)
@@ -121,6 +125,7 @@ export class Esbuild {
         ...esbuildCommonOptions,
         entryPoints: [this.options.entryFile],
         bundle: this.options.bundle,
+        tsconfig,
         // incremental: this.options.entrySource ? false : true,
         sourceRoot: `/${FS_PREFIX}`,
         outfile: path.join(this.options.homedir, 'bundle.js'),
