@@ -37,7 +37,7 @@
     "docs": "dokio -o README.md",
     "test": "utr",
     "cov": "utr --coverage",
-    "build": "npm run build:cjs & npm run build:esm & npm run build:types && echo done.",
+    "build": "npm run build:cjs & npm run build:esm && echo done.",
     "build:cjs": "swc -C module.type=commonjs ./src -d dist/cjs",
     "build:esm": "swc -C module.type=es6 ./src -d dist/esm && echo '{\"type\":\"module\"}' >dist/esm/package.json",
     "build:types": "tsc -p tsconfig.dist.json --outDir dist/types",
